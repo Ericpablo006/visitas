@@ -1,0 +1,276 @@
+// Tabôa – Fortalecimento Comunitário
+// Visita Pós-Crédito — schema Prisma / PostgreSQL
+//
+// Convenções:
+//  - Valores monetários ficam em CENTAVOS (Int), nunca Float/Decimal.
+//  - IDs são cuid(); quando existe um número "de exibição" sequencial
+//    (ex.: número do documento da visita), ele fica em campo separado.
+//  - Enums em UPPER_SNAKE.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────
+
+enum Role {
+  TECNICO
+  COORDENADOR
+  ADMIN
+}
+
+enum VisitaStatus {
+  RASCUNHO
+  FINALIZADA
+}
+
+enum RespostaSimNao {
+  SIM
+  NAO
+  PARCIAL
+  NAO_SE_APLICA
+}
+
+enum SignatureType {
+  TECNICO
+  BENEFICIARIO_DESENHO
+  BENEFICIARIO_DIGITAL
+}
+
+enum AuditAction {
+  LOGIN
+  LOGIN_FALHOU
+  LOGIN_MOBILE
+  REFRESH_TOKEN
+  LOGOUT
+  CRIACAO
+  EDICAO
+  UPLOAD_FOTO
+  UPLOAD_ASSINATURA
+  FINALIZACAO
+  REVOGACAO
+  ATIVACAO
+  DESATIVACAO
+}
+
+// ─── Usuários e autenticação ────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  matricula    String?
+  passwordHash String
+  role         Role     @default(TECNICO)
+  active       Boolean  @default(true)
+  tokenVersion Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  visitasCriadas    Visita[]             @relation("VisitaTecnico")
+  visitasFinalizadas Visita[]            @relation("VisitaFinalizadaPor")
+  fotosEnviadas     VisitaFoto[]         @relation("FotoUploadedBy")
+  assinaturasCriadas VisitaAssinatura[]  @relation("AssinaturaCriadaPor")
+  refreshTokens     MobileRefreshToken[]
+  auditLogs         AuditLog[]
+
+  @@index([role])
+}
+
+model MobileRefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  deviceId  String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ─── Beneficiários e finalidades ─────────────────────────────────────────
+
+model Beneficiario {
+  id        String   @id @default(cuid())
+  cpf       String   @unique
+  nome      String
+  endereco  String
+  municipio String
+  telefone  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  visitas Visita[]
+}
+
+/// Lista de finalidades do crédito, editável pelo painel (não é um enum
+/// fixo) para que a equipe possa ajustar sem precisar de novo deploy.
+model Purpose {
+  id        String   @id @default(cuid())
+  label     String
+  ativo     Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  visitas VisitaPurpose[]
+
+  @@index([ativo, sortOrder])
+}
+
+model VisitaPurpose {
+  id        String  @id @default(cuid())
+  visitaId  String
+  visita    Visita  @relation(fields: [visitaId], references: [id], onDelete: Cascade)
+  purposeId String
+  purpose   Purpose @relation(fields: [purposeId], references: [id], onDelete: Restrict)
+
+  @@unique([visitaId, purposeId])
+}
+
+/// Contador por ano para gerar o número oficial do documento (VP-2026-000123).
+model DocumentSequence {
+  ano    Int @id
+  ultimo Int @default(0)
+}
+
+// ─── Visita ───────────────────────────────────────────────────────────────
+
+model Visita {
+  id              String       @id @default(cuid())
+  /// UUID gerado no app Android (Room) — chave de idempotência para reenvio.
+  clientLocalId   String       @unique
+  /// Ex.: "VP-2026-000123" — atribuído apenas na finalização.
+  numeroDocumento String?      @unique
+  status          VisitaStatus @default(RASCUNHO)
+
+  tecnicoId String
+  tecnico   User   @relation("VisitaTecnico", fields: [tecnicoId], references: [id], onDelete: Restrict)
+
+  beneficiarioId String
+  beneficiario   Beneficiario @relation(fields: [beneficiarioId], references: [id], onDelete: Restrict)
+  // Snapshot dos dados do beneficiário no momento da visita — não muda
+  // retroativamente se o cadastro do beneficiário for editado depois.
+  beneficiarioNomeSnapshot     String
+  beneficiarioCpfSnapshot      String
+  beneficiarioEnderecoSnapshot String
+
+  municipio  String
+  dataVisita DateTime
+
+  // Pergunta 7 — pede justificativa quando a resposta não é SIM.
+  pergunta7Resposta      RespostaSimNao
+  pergunta7Justificativa String?
+
+  // Pergunta 8 — simples, sem condicional.
+  pergunta8Resposta RespostaSimNao
+
+  // Pergunta 9 — geração de emprego/renda.
+  pergunta9Resposta           RespostaSimNao
+  pergunta9QuantidadeEmpregos Int?
+  pergunta9RendaEstimadaCents Int?
+
+  // Pergunta 10 — atividade paralisada?
+  pergunta10Resposta          RespostaSimNao
+  pergunta10MotivoParalisacao String?
+
+  // Pergunta 11 — parcelas em atraso.
+  pergunta11Resposta           RespostaSimNao
+  pergunta11ParcelasAtrasadas Int?
+
+  // Pergunta 12 — dificuldades enfrentadas.
+  pergunta12Resposta        RespostaSimNao
+  pergunta12Dificuldades    String?
+
+  // Pergunta 13 — recomendaria o programa a outros?
+  pergunta13Resposta RespostaSimNao
+  pergunta13Motivo   String?
+
+  observacoes String?
+
+  finalizadaEm    DateTime?
+  finalizadaPorId String?
+  finalizadaPor   User?     @relation("VisitaFinalizadaPor", fields: [finalizadaPorId], references: [id], onDelete: SetNull)
+  pdfFileKey      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purposes    VisitaPurpose[]
+  fotos       VisitaFoto[]
+  assinaturas VisitaAssinatura[]
+
+  @@index([tecnicoId, dataVisita])
+  @@index([municipio])
+  @@index([status])
+}
+
+model VisitaFoto {
+  id       String @id @default(cuid())
+  visitaId String
+  visita   Visita @relation(fields: [visitaId], references: [id], onDelete: Cascade)
+  /// UUID gerado no app — chave de idempotência do upload da foto.
+  clientLocalId String
+  fileKey       String
+  legenda       String?
+  ordem         Int      @default(0)
+  uploadedById  String
+  uploadedBy    User     @relation("FotoUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+  createdAt     DateTime @default(now())
+
+  @@unique([visitaId, clientLocalId])
+  @@index([visitaId])
+}
+
+model VisitaAssinatura {
+  id       String        @id @default(cuid())
+  visitaId String
+  visita   Visita        @relation(fields: [visitaId], references: [id], onDelete: Cascade)
+  tipo     SignatureType
+  fileKey  String
+  /// Obrigatório quando tipo = BENEFICIARIO_DIGITAL (impressão digital fotografada).
+  testemunhaNome String?
+  testemunhaCpf  String?
+  criadoPorId    String
+  criadoPor      User     @relation("AssinaturaCriadaPor", fields: [criadoPorId], references: [id], onDelete: Restrict)
+  createdAt      DateTime @default(now())
+
+  @@unique([visitaId, tipo])
+  @@index([visitaId])
+}
+
+// ─── Auditoria ─────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  actorId    String?
+  actor      User?       @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  acao       AuditAction
+  entidade   String
+  entidadeId String
+  detalhes   Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime    @default(now())
+
+  @@index([entidade, entidadeId])
+  @@index([actorId, createdAt])
+}
+
+// ─── Infra ─────────────────────────────────────────────────────────────────
+
+/// Rate limiting persistido no banco (funciona entre múltiplas instâncias).
+model RateLimit {
+  key     String   @id
+  count   Int
+  resetAt DateTime
+
+  @@index([resetAt])
+}

@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #eef4f0;
+  --color-brand-100: #d3e6da;
+  --color-brand-300: #7fb494;
+  --color-brand-500: #2f6749;
+  --color-brand-600: #275a3f;
+  --color-brand-700: #204a35;
+  --color-brand-900: #0f2417;
+  --color-ink: #101828;
+  --color-muted: #5b6577;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+body {
+  background: #f6f8f6;
+  color: var(--color-ink);
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:pointer-events-none disabled:opacity-50;
+}
+.btn-secondary {
+  @apply inline-flex items-center justify-center rounded-lg border border-brand-300 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50 disabled:pointer-events-none disabled:opacity-50;
+}
+.btn-danger {
+  @apply inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:pointer-events-none disabled:opacity-50;
+}
+.card {
+  @apply rounded-xl border border-black/5 bg-white p-6 shadow-sm;
+}
+.input {
+  @apply w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500;
+}
+.label {
+  @apply mb-1 block text-xs font-semibold text-muted;
+}
+.field-error {
+  @apply mt-1 text-xs text-red-600;
+}
+.chip-gray {
+  @apply inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700;
+}
+.chip-green {
+  @apply inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700;
+}
+.chip-red {
+  @apply inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700;
+}
