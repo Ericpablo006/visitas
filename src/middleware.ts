@@ -10,7 +10,7 @@ export async function middleware(req: NextRequest) {
 
   if (pathname.startsWith("/painel") || pathname.startsWith("/admin") || pathname.startsWith("/visitas") || pathname.startsWith("/perfil")) {
     const token = req.cookies.get(SESSION_COOKIE)?.value;
-    const secret = process.env.AUTH_SECRET || "";
+    const secret = (process.env.AUTH_SECRET || "").trim();
     const session = await verifySession(token, secret);
     if (!session) {
       const url = new URL("/entrar", req.url);
