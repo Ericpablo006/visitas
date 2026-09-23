@@ -66,14 +66,19 @@ const FINALIDADES: string[] = [
 // para ADMIN_PASSWORD/TECNICO_PASSWORD — remova a variável depois de rodar.
 const resetPasswords = process.env.SEED_RESET_PASSWORDS?.trim() === "true";
 
-async function main() {
-  const adminName = process.env.ADMIN_NAME || "Administrador Tabôa";
-  const adminEmail = (process.env.ADMIN_EMAIL || "admin@localhost.dev").toLowerCase();
-  const adminPassword = process.env.ADMIN_PASSWORD || "TrocarSenha!123";
+// CLIs/terminais às vezes gravam a variável com uma quebra de linha grudada no valor
+// (ex.: `"senha" | vercel env add ...` no PowerShell) — isso faria o hash bater com
+// "senha\n" e nenhum login com a senha "limpa" funcionaria nunca. Sempre `.trim()`.
+const env = (key: string, fallback: string) => (process.env[key]?.trim() || fallback);
 
-  const tecnicoName = process.env.TECNICO_NAME || "Técnico de Campo";
-  const tecnicoEmail = (process.env.TECNICO_EMAIL || "tecnico@localhost.dev").toLowerCase();
-  const tecnicoPassword = process.env.TECNICO_PASSWORD || "TrocarSenha!123";
+async function main() {
+  const adminName = env("ADMIN_NAME", "Administrador Tabôa");
+  const adminEmail = env("ADMIN_EMAIL", "admin@localhost.dev").toLowerCase();
+  const adminPassword = env("ADMIN_PASSWORD", "TrocarSenha!123");
+
+  const tecnicoName = env("TECNICO_NAME", "Técnico de Campo");
+  const tecnicoEmail = env("TECNICO_EMAIL", "tecnico@localhost.dev").toLowerCase();
+  const tecnicoPassword = env("TECNICO_PASSWORD", "TrocarSenha!123");
 
   await db.user.upsert({
     where: { email: adminEmail },
