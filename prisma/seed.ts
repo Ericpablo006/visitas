@@ -60,6 +60,12 @@ const FINALIDADES: string[] = [
   "Outros investimentos produtivos",
 ];
 
+// Por padrão o seed NUNCA sobrescreve o admin/técnico já criados (evita apagar uma senha
+// que alguém já trocou em "Meu perfil"). Defina SEED_RESET_PASSWORDS=true temporariamente
+// (variável de ambiente) só quando precisar forçar a senha destes dois usuários de volta
+// para ADMIN_PASSWORD/TECNICO_PASSWORD — remova a variável depois de rodar.
+const resetPasswords = process.env.SEED_RESET_PASSWORDS === "true";
+
 async function main() {
   const adminName = process.env.ADMIN_NAME || "Administrador Tabôa";
   const adminEmail = (process.env.ADMIN_EMAIL || "admin@localhost.dev").toLowerCase();
@@ -71,17 +77,17 @@ async function main() {
 
   await db.user.upsert({
     where: { email: adminEmail },
-    update: {},
+    update: resetPasswords ? { passwordHash: await hashPassword(adminPassword) } : {},
     create: { name: adminName, email: adminEmail, passwordHash: await hashPassword(adminPassword), role: "ADMIN" },
   });
-  console.log(`✔ Administrador: ${adminEmail}`);
+  console.log(`✔ Administrador: ${adminEmail}${resetPasswords ? " (senha redefinida)" : ""}`);
 
   await db.user.upsert({
     where: { email: tecnicoEmail },
-    update: {},
+    update: resetPasswords ? { passwordHash: await hashPassword(tecnicoPassword) } : {},
     create: { name: tecnicoName, email: tecnicoEmail, passwordHash: await hashPassword(tecnicoPassword), role: "TECNICO", matricula: "T-0001" },
   });
-  console.log(`✔ Técnico de exemplo: ${tecnicoEmail}`);
+  console.log(`✔ Técnico de exemplo: ${tecnicoEmail}${resetPasswords ? " (senha redefinida)" : ""}`);
 
   for (const [i, label] of FINALIDADES.entries()) {
     await db.purpose.upsert({
