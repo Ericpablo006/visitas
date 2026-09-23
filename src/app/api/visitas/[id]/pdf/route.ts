@@ -29,9 +29,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   let fileKey = visita.pdfFileKey;
   if (!fileKey) {
+    const selectedIds = new Set(visita.purposes.map((p) => p.purposeId));
+    const todasFinalidades = await db.purpose.findMany({
+      where: { empresaId: visita.empresaId, ativo: true },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, label: true, isOutro: true },
+    });
     const bytes = await renderVisitaPdf({
       ...visita,
-      purposeLabels: visita.purposes.map((p) => p.purpose.label),
+      purposeLabels: todasFinalidades.map((p) => ({ label: p.label, isOutro: p.isOutro, selected: selectedIds.has(p.id) })),
     });
     const saved = await savePrivatePdf(visita.id, bytes);
     fileKey = saved.key;

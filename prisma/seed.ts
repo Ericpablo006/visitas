@@ -1,64 +1,65 @@
 // Cria o administrador, um técnico de exemplo e a lista de finalidades do
 // crédito. Idempotente: pode ser rodado de novo sem duplicar nada.
 //
-// IMPORTANTE: a wording abaixo das ~46 finalidades é um PLACEHOLDER — a
-// Tabôa deve revisar/ajustar em Admin → Finalidades (ou editando este
-// array) com a lista oficial usada pelo programa de crédito. A tabela é
-// editável pelo painel justamente para não depender de um novo deploy.
+// Lista oficial da Tabôa ("Modelo formulário visita pós crédito") — ordem
+// preservada de propósito (é a mesma ordem impressa no formulário em papel,
+// em 3 colunas), para que o PDF gerado bata visualmente com o original.
+// "Outro" é o único item com campo de texto livre (ver Visita.outroFinalidadeDescricao).
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/lib/auth/password";
 
 const db = new PrismaClient();
 
 const FINALIDADES: string[] = [
-  "Aquisição de sementes",
-  "Aquisição de mudas",
-  "Aquisição de insumos agrícolas (adubo, calcário)",
-  "Aquisição de ferramentas manuais",
-  "Aquisição de equipamentos agrícolas de pequeno porte",
-  "Aquisição de irrigação (mangueiras, aspersores, bombas)",
-  "Construção de cisterna",
-  "Construção/reforma de curral",
-  "Construção/reforma de galinheiro",
-  "Construção/reforma de chiqueiro",
-  "Aquisição de animais de pequeno porte (aves, suínos)",
-  "Aquisição de animais de médio porte (caprinos, ovinos)",
-  "Aquisição de bovinos de leite",
-  "Aquisição de bovinos de corte",
-  "Ração e suplementação animal",
-  "Vacinas e insumos veterinários",
-  "Cerca e arame para pastagem",
-  "Recuperação de pastagem",
-  "Produção de mel (apicultura)",
-  "Produção de artesanato",
-  "Compra de matéria-prima para artesanato",
-  "Máquina de costura",
-  "Compra de insumos para padaria/confeitaria",
-  "Equipamento de cozinha comunitária",
-  "Compra de freezer/geladeira para comércio",
-  "Reforma de ponto comercial",
-  "Compra de mercadoria para revenda",
-  "Capital de giro para pequeno comércio",
-  "Compra de carrinho/banca para feira",
-  "Compra de bicicleta de carga",
-  "Compra de motocicleta para trabalho",
-  "Reforma de veículo de trabalho",
-  "Compra de painel solar / energia alternativa",
-  "Poço artesiano / captação de água",
-  "Sistema de irrigação por gotejamento",
-  "Produção de hortaliças",
-  "Produção de frutas",
-  "Beneficiamento de produtos agrícolas",
-  "Compra de embalagens para venda de produtos",
-  "Participação em feiras e eventos",
-  "Transporte da produção até o ponto de venda",
-  "Reforma de residência (melhoria habitacional produtiva)",
-  "Instalação de banheiro/saneamento básico",
-  "Compra de computador/celular para o negócio",
-  "Capacitação/curso técnico",
-  "Regularização documental do negócio (MEI, licenças)",
-  "Outros investimentos produtivos",
+  "Adubação",
+  "Aipim",
+  "Análise de solo",
+  "Aquisição Micro trator",
+  "Área nova de cacau",
+  "Avicultura",
+  "Balizamento",
+  "Bomba d'água",
+  "Calcário",
+  "Cerca",
+  "Clonagem",
+  "Cocho",
+  "Construção barcaça",
+  "Construção Viveiro",
+  "Criação de peixes",
+  "Desbrota",
+  "Desidratador",
+  "Energia solar",
+  "Enxertia",
+  "Esterco",
+  "Estufa Cacau",
+  "Gesso",
+  "Hortaliças",
+  "Irrigação",
+  "Limpeza",
+  "Mão-de-obra",
+  "Maracujá",
+  "Meliponicultura",
+  "Motor foliar",
+  "Motor Serra",
+  "Mudas banana",
+  "Mudas cacau",
+  "Ovino",
+  "Pó de rocha",
+  "Poda",
+  "Pulverizador a motor",
+  "Pulverizador manual",
+  "Ração",
+  "Raleamento",
+  "Reforma barcaça",
+  "Replantio",
+  "Roçadeira",
+  "Roçagem",
+  "SAF",
+  "Secador",
+  "Suíno",
+  "Trator (hora)",
 ];
+const OUTRO_LABEL = "Outro";
 
 // Por padrão o seed NUNCA sobrescreve o admin/técnico já criados (evita apagar uma senha
 // que alguém já trocou em "Meu perfil"). Defina SEED_RESET_PASSWORDS=true temporariamente
@@ -119,7 +120,13 @@ async function main() {
       create: { id: `finalidade-${i + 1}`, empresaId: empresaTaboa.id, label, sortOrder: i },
     });
   }
-  console.log(`✔ ${FINALIDADES.length} finalidades de crédito cadastradas.`);
+  const outroId = `finalidade-${FINALIDADES.length + 1}`;
+  await db.purpose.upsert({
+    where: { id: outroId },
+    update: { label: OUTRO_LABEL, sortOrder: FINALIDADES.length, isOutro: true },
+    create: { id: outroId, empresaId: empresaTaboa.id, label: OUTRO_LABEL, sortOrder: FINALIDADES.length, isOutro: true },
+  });
+  console.log(`✔ ${FINALIDADES.length + 1} finalidades de crédito cadastradas (incl. "Outro").`);
 }
 
 main()

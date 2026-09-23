@@ -35,13 +35,6 @@ enum VisitaStatus {
   FINALIZADA
 }
 
-enum RespostaSimNao {
-  SIM
-  NAO
-  PARCIAL
-  NAO_SE_APLICA
-}
-
 enum SignatureType {
   TECNICO
   BENEFICIARIO_DESENHO
@@ -62,6 +55,7 @@ enum AuditAction {
   REVOGACAO
   ATIVACAO
   DESATIVACAO
+  EXCLUSAO
 }
 
 // ─── Empresas (multi-tenant) ─────────────────────────────────────────────
@@ -155,6 +149,9 @@ model Purpose {
   empresaId String
   empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   label     String
+  /// No máximo uma por empresa: marca a opção "Outro" (a única finalidade que
+  /// vem com um campo de texto livre para descrever — ver Visita.outroFinalidadeDescricao).
+  isOutro   Boolean  @default(false)
   ativo     Boolean  @default(true)
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
@@ -211,34 +208,33 @@ model Visita {
   municipio  String
   dataVisita DateTime
 
-  // Pergunta 7 — pede justificativa quando a resposta não é SIM.
-  pergunta7Resposta      RespostaSimNao
-  pergunta7Justificativa String?
+  /// Pergunta 5 — itens detalhados da proposta original do crédito (texto livre).
+  finalidadeDetalhada String
 
-  // Pergunta 8 — simples, sem condicional.
-  pergunta8Resposta RespostaSimNao
+  /// Pergunta 7 — está aplicando o recurso conforme a finalidade da proposta?
+  aplicandoConforme              Boolean
+  aplicandoConformeJustificativa String?
 
-  // Pergunta 9 — geração de emprego/renda.
-  pergunta9Resposta           RespostaSimNao
-  pergunta9QuantidadeEmpregos Int?
-  pergunta9RendaEstimadaCents Int?
+  /// Pergunta 8 (parte "Outro") — descrição livre quando a finalidade "Outro" é marcada.
+  outroFinalidadeDescricao String?
 
-  // Pergunta 10 — atividade paralisada?
-  pergunta10Resposta          RespostaSimNao
-  pergunta10MotivoParalisacao String?
+  /// Pergunta 9 — teve desafio na aplicação do recurso?
+  teveDesafio      Boolean
+  desafioDescricao String?
 
-  // Pergunta 11 — parcelas em atraso.
-  pergunta11Resposta           RespostaSimNao
-  pergunta11ParcelasAtrasadas Int?
+  /// Pergunta 10/11 — assistência técnica após o crédito (periodicidade se sim, motivo se não).
+  assistenciaTecnica        Boolean
+  assistenciaPeriodicidade  String?
+  assistenciaMotivoNegativa String?
 
-  // Pergunta 12 — dificuldades enfrentadas.
-  pergunta12Resposta        RespostaSimNao
-  pergunta12Dificuldades    String?
+  /// Pergunta 12 — nome e contato telefônico do técnico que acompanha (texto livre no
+  /// formulário oficial — pode ser diferente do técnico logado no sistema).
+  tecnicoNomeContato String
 
-  // Pergunta 13 — recomendaria o programa a outros?
-  pergunta13Resposta RespostaSimNao
-  pergunta13Motivo   String?
+  /// Pergunta 13 — já tem ponto de referência da área financiada?
+  pontoReferencia Boolean
 
+  /// Pergunta 15 — observações.
   observacoes String?
 
   finalizadaEm    DateTime?

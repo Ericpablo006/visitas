@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   const purposes = await db.purpose.findMany({
     where: { ativo: true, empresaId: user.empresaId },
     orderBy: { sortOrder: "asc" },
-    select: { id: true, label: true, sortOrder: true, updatedAt: true },
+    select: { id: true, label: true, sortOrder: true, isOutro: true, updatedAt: true },
   });
 
   return NextResponse.json({ purposes: purposes.map((p) => ({ ...p, updatedAt: p.updatedAt.toISOString() })) });

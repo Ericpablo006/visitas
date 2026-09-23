@@ -1,72 +1,66 @@
 import { z } from "zod";
-import { RespostaSimNao } from "@prisma/client";
-import { zCpf, zDateInput, zInt, zIntOptional, zMoneyOptional, zName, zOptText } from "@/lib/validation";
-
-const zResposta = z.nativeEnum(RespostaSimNao);
+import { zCpf, zDateInput, zInt, zName, zOptText } from "@/lib/validation";
 
 /**
- * Schema único das 6 etapas do formulário (o wizard web e o app Android
- * enviam o mesmo formato ao finalizar cada etapa localmente — o servidor
- * só valida a visita completa na criação/edição).
+ * Schema único das etapas do formulário — segue exatamente a numeração do
+ * documento oficial da Tabôa ("Modelo formulário visita pós crédito"). O
+ * wizard web e o app Android enviam o mesmo formato; o servidor só valida a
+ * visita completa na criação/edição.
  */
 export const visitaSchema = z
   .object({
     clientLocalId: z.string().uuid("Identificador local inválido."),
 
-    // Etapa 1 — identificação
+    // 1-4 — identificação
     beneficiarioNome: zName,
     beneficiarioCpf: zCpf,
     beneficiarioEndereco: z.string().trim().min(3, "Informe o endereço.").max(300),
     municipio: z.string().trim().min(2, "Informe o município.").max(120),
+
+    // 5 — finalidade do crédito (itens detalhados da proposta)
+    finalidadeDetalhada: z.string().trim().min(3, "Descreva a finalidade do crédito.").max(2000),
+
+    // 6 — data
     dataVisita: zDateInput,
 
-    // Etapa 2 — finalidades do crédito (o id não precisa ser cuid — a
-    // existência/atividade real é conferida contra o banco na rota).
+    // 7 — está aplicando o recurso conforme a proposta?
+    aplicandoConforme: z.boolean(),
+    aplicandoConformeJustificativa: zOptText(1000),
+
+    // 8 — finalidades já aplicadas (checklist) + "Outro" com descrição livre
     purposeIds: z.array(z.string().min(1)).min(1, "Selecione ao menos uma finalidade."),
+    outroFinalidadeDescricao: zOptText(300),
 
-    // Etapa 3 — perguntas 7 a 13
-    pergunta7Resposta: zResposta,
-    pergunta7Justificativa: zOptText(1000),
+    // 9 — desafio na aplicação do recurso?
+    teveDesafio: z.boolean(),
+    desafioDescricao: zOptText(1000),
 
-    pergunta8Resposta: zResposta,
+    // 10/11 — assistência técnica após o crédito
+    assistenciaTecnica: z.boolean(),
+    assistenciaPeriodicidade: zOptText(200),
+    assistenciaMotivoNegativa: zOptText(1000),
 
-    pergunta9Resposta: zResposta,
-    pergunta9QuantidadeEmpregos: zIntOptional(0, 999),
-    pergunta9RendaEstimadaCents: zMoneyOptional,
+    // 12 — nome e contato telefônico do técnico que acompanha
+    tecnicoNomeContato: z.string().trim().min(2, "Informe o nome e contato do técnico.").max(200),
 
-    pergunta10Resposta: zResposta,
-    pergunta10MotivoParalisacao: zOptText(1000),
+    // 13 — já tem ponto de referência da área financiada?
+    pontoReferencia: z.boolean(),
 
-    pergunta11Resposta: zResposta,
-    pergunta11ParcelasAtrasadas: zIntOptional(0, 999),
-
-    pergunta12Resposta: zResposta,
-    pergunta12Dificuldades: zOptText(1000),
-
-    pergunta13Resposta: zResposta,
-    pergunta13Motivo: zOptText(1000),
-
-    // Etapa 4 — observações
+    // 15 — observações
     observacoes: zOptText(2000),
   })
   .superRefine((v, ctx) => {
-    if (v.pergunta7Resposta !== "SIM" && !v.pergunta7Justificativa) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["pergunta7Justificativa"], message: "Justifique a resposta." });
+    if (!v.aplicandoConforme && !v.aplicandoConformeJustificativa) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["aplicandoConformeJustificativa"], message: "Justifique a resposta." });
     }
-    if (v.pergunta9Resposta === "SIM" && v.pergunta9QuantidadeEmpregos === null) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["pergunta9QuantidadeEmpregos"], message: "Informe a quantidade de empregos gerados." });
+    if (v.teveDesafio && !v.desafioDescricao) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["desafioDescricao"], message: "Descreva o desafio enfrentado." });
     }
-    if (v.pergunta10Resposta === "NAO" && !v.pergunta10MotivoParalisacao) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["pergunta10MotivoParalisacao"], message: "Informe o motivo da paralisação." });
+    if (v.assistenciaTecnica && !v.assistenciaPeriodicidade) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["assistenciaPeriodicidade"], message: "Informe a periodicidade." });
     }
-    if (v.pergunta11Resposta !== "NAO" && v.pergunta11ParcelasAtrasadas === null) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["pergunta11ParcelasAtrasadas"], message: "Informe quantas parcelas estão em atraso." });
-    }
-    if ((v.pergunta12Resposta === "SIM" || v.pergunta12Resposta === "PARCIAL") && !v.pergunta12Dificuldades) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["pergunta12Dificuldades"], message: "Descreva as dificuldades enfrentadas." });
-    }
-    if (v.pergunta13Resposta === "NAO" && !v.pergunta13Motivo) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["pergunta13Motivo"], message: "Informe o motivo." });
+    if (!v.assistenciaTecnica && !v.assistenciaMotivoNegativa) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["assistenciaMotivoNegativa"], message: "Informe o motivo." });
     }
   });
 

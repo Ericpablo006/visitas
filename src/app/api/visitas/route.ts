@@ -25,10 +25,13 @@ export async function POST(req: Request) {
   }
   const data = parsed.data;
 
-  const purposes = await db.purpose.findMany({ where: { id: { in: data.purposeIds }, ativo: true, empresaId: user.empresaId }, select: { id: true } });
+  const purposes = await db.purpose.findMany({ where: { id: { in: data.purposeIds }, ativo: true, empresaId: user.empresaId }, select: { id: true, isOutro: true } });
   if (purposes.length !== data.purposeIds.length) {
     console.error("[POST /api/visitas] finalidades ausentes", JSON.stringify({ enviados: data.purposeIds, encontrados: purposes.map((p) => p.id), empresaId: user.empresaId }));
     return NextResponse.json({ error: "Uma ou mais finalidades selecionadas não existem mais." }, { status: 422 });
+  }
+  if (purposes.some((p) => p.isOutro) && !data.outroFinalidadeDescricao) {
+    return NextResponse.json({ error: "Descreva a finalidade em 'Outro'.", issues: [{ path: ["outroFinalidadeDescricao"], message: "Descreva a finalidade em 'Outro'." }] }, { status: 422 });
   }
 
   const meta = await requestMeta();

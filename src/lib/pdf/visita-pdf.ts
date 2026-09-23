@@ -1,28 +1,19 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import type { VisitaWithRelations } from "@/lib/visita-response";
 import { readPrivateFileBuffer } from "@/lib/storage";
 import { formatCPF } from "@/lib/cpf";
-
-const RESPOSTA_LABEL: Record<string, string> = {
-  SIM: "Sim",
-  NAO: "Não",
-  PARCIAL: "Parcialmente",
-  NAO_SE_APLICA: "Não se aplica",
-};
 
 const hex = (h: string) => {
   const n = parseInt(h.slice(1), 16);
   return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
 };
-// Verde institucional da Tabôa (#2f6749) + paleta neutra de apoio.
 const C = {
-  ink: hex("#0f2417"),
-  brand: hex("#2f6749"),
-  brandDark: hex("#204a35"),
-  text: hex("#101828"),
-  muted: hex("#5b6577"),
-  line: hex("#dfe5ef"),
-  soft: hex("#eef4f0"),
+  text: hex("#1a1a1a"),
+  muted: hex("#6b6b6b"),
+  line: hex("#9a9a9a"),
+  box: hex("#000000"),
   white: rgb(1, 1, 1),
 };
 
@@ -64,14 +55,18 @@ const fmtDate = (d: Date) =>
   new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
 const fmtDateTime = (d: Date) =>
   new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(d);
-const fmtBRL = (cents: number) => `R$ ${(cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
 type VisitaPdfInput = VisitaWithRelations & {
   tecnico: { name: string; email: string; matricula: string | null };
   finalizadaPor: { name: string } | null;
-  purposeLabels: string[];
+  purposeLabels: { label: string; selected: boolean; isOutro: boolean }[];
 };
 
+/**
+ * Layout deliberadamente parecido com o formulário em papel da Tabôa (mesma
+ * numeração 1-15, mesmas seções, checklist de finalidades em 3 colunas) —
+ * pedido explícito para que o PDF gerado saia "idêntico" ao modelo oficial.
+ */
 export async function renderVisitaPdf(visita: VisitaPdfInput): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   pdf.setTitle(`Visita Pós-Crédito ${visita.numeroDocumento ?? visita.id}`);
@@ -80,12 +75,24 @@ export async function renderVisitaPdf(visita: VisitaPdfInput): Promise<Uint8Arra
 
   const reg = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const M = 48;
+  const italic = await pdf.embedFont(StandardFonts.HelveticaOblique);
+
+  // TODO(multi-empresa): usar `visita.empresa.logoFileKey` quando cada empresa
+  // puder subir o próprio logo pelo painel — por ora usa o logo oficial da Tabôa.
+  let logo: PDFImage | null = null;
+  try {
+    const logoBytes = await readFile(path.join(process.cwd(), "src/lib/pdf/assets/logo.png"));
+    logo = await pdf.embedPng(logoBytes);
+  } catch {
+    logo = null;
+  }
+
+  const M = 50;
   const PAGE: [number, number] = [595.28, 841.89];
 
   let page = pdf.addPage(PAGE);
   let { width, height } = page.getSize();
-  let y = 0;
+  let y = height - 40;
 
   function newPage() {
     page = pdf.addPage(PAGE);
@@ -93,153 +100,284 @@ export async function renderVisitaPdf(visita: VisitaPdfInput): Promise<Uint8Arra
     y = height - 40;
   }
 
-  function header(title: string) {
-    page.drawRectangle({ x: 0, y: height - 96, width, height: 96, color: C.brand });
-    page.drawRectangle({ x: 0, y: height - 99, width, height: 3, color: C.brandDark });
-    page.drawText("TABÔA", { x: M, y: height - 42, size: 20, font: bold, color: C.white });
-    page.drawText("Fortalecimento Comunitário", { x: M, y: height - 60, size: 10, font: reg, color: C.white });
-    const num = visita.numeroDocumento ?? "RASCUNHO";
-    page.drawText(title, { x: width - M - bold.widthOfTextAtSize(title, 14), y: height - 42, size: 14, font: bold, color: C.white });
-    page.drawText(num, { x: width - M - reg.widthOfTextAtSize(num, 11), y: height - 60, size: 11, font: reg, color: C.white });
-    y = height - 130;
+  function ensureSpace(needed: number) {
+    if (y - needed < 60) newPage();
   }
 
-  function ensureSpace(needed: number) {
-    if (y - needed < 70) {
-      footer();
-      newPage();
-      header("VISITA PÓS-CRÉDITO (continuação)");
+  function coverPage() {
+    if (logo) {
+      const targetW = 90;
+      const scale = targetW / logo.width;
+      const w = logo.width * scale;
+      const h = logo.height * scale;
+      page.drawImage(logo, { x: (width - w) / 2, y: y - h, width: w, height: h });
+      y -= h + 10;
     }
+    const title = "FORMULÁRIO DE VISITA PÓS CRÉDITO";
+    page.drawText(title, { x: (width - bold.widthOfTextAtSize(title, 13)) / 2, y, size: 13, font: bold, color: C.text });
+    y -= 28;
   }
 
   function sectionTitle(title: string) {
-    ensureSpace(28);
-    page.drawText(safe(title.toUpperCase()), { x: M, y, size: 11, font: bold, color: C.brandDark });
+    ensureSpace(24);
+    page.drawText(safe(title), { x: M, y, size: 11, font: bold, color: C.text });
+    y -= 18;
+  }
+
+  /** Campo estilo "N - Rótulo: valor" numerado, igual ao formulário original. */
+  function numbered(n: number, label: string, value: string, opts: { boldLabel?: boolean } = {}) {
+    const prefix = `${n} - ${label}: `;
+    const prefixWidth = bold.widthOfTextAtSize(prefix, 10.5);
+    const maxWidth = width - 2 * M - prefixWidth;
+    const lines = wrap(value || "", reg, 10.5, Math.max(maxWidth, 120));
+    ensureSpace(14 * lines.length + 6);
+    page.drawText(safe(prefix), { x: M, y, size: 10.5, font: opts.boldLabel ? bold : reg, color: C.text });
+    page.drawText(lines[0] ?? "", { x: M + prefixWidth, y, size: 10.5, font: reg, color: C.text });
+    if (!value) {
+      // linha em branco (campo não preenchido)
+      page.drawLine({ start: { x: M + prefixWidth, y: y - 2 }, end: { x: width - M, y: y - 2 }, thickness: 0.7, color: C.line });
+    }
+    y -= 14;
+    for (const extra of lines.slice(1)) {
+      page.drawText(extra, { x: M, y, size: 10.5, font: reg, color: C.text });
+      y -= 14;
+    }
     y -= 6;
-    page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 1, color: C.line });
+  }
+
+  function longField(n: number, label: string, value: string) {
+    ensureSpace(20);
+    page.drawText(safe(`${n} - ${label}:`), { x: M, y, size: 10.5, font: reg, color: C.text });
+    y -= 15;
+    const lines = wrap(value || "—", reg, 10.5, width - 2 * M);
+    ensureSpace(14 * lines.length + 10);
+    for (const l of lines) {
+      page.drawText(l, { x: M, y, size: 10.5, font: reg, color: C.text });
+      y -= 14;
+    }
+    y -= 6;
+  }
+
+  function checkbox(x: number, checked: boolean): number {
+    const s = checked ? "(X)" : "( )";
+    page.drawText(s, { x, y, size: 10, font: reg, color: C.text });
+    return x + reg.widthOfTextAtSize(s, 10) + 4;
+  }
+
+  function simNao(n: number, label: string, sim: boolean, justificarSeNao?: string) {
+    ensureSpace(18);
+    page.drawText(safe(`${n} - ${label}`), { x: M, y, size: 10.5, font: reg, color: C.text });
+    y -= 16;
+    let x = M;
+    x = checkbox(x, sim);
+    page.drawText("Sim", { x, y, size: 10, font: reg, color: C.text });
+    x += reg.widthOfTextAtSize("Sim", 10) + 24;
+    x = checkbox(x, !sim);
+    page.drawText("Não", { x, y, size: 10, font: reg, color: C.text });
+    y -= 16;
+    if (justificarSeNao !== undefined) {
+      const prefix = 'Se "Não", justificar: ';
+      const prefixW = reg.widthOfTextAtSize(prefix, 10);
+      const lines = wrap(justificarSeNao || "", reg, 10, width - 2 * M - prefixW);
+      page.drawText(safe(prefix), { x: M, y, size: 10, font: reg, color: C.text });
+      page.drawText(lines[0] ?? "", { x: M + prefixW, y, size: 10, font: reg, color: C.text });
+      if (!justificarSeNao) page.drawLine({ start: { x: M + prefixW, y: y - 2 }, end: { x: width - M, y: y - 2 }, thickness: 0.7, color: C.line });
+      y -= 14;
+      for (const extra of lines.slice(1)) {
+        page.drawText(extra, { x: M, y, size: 10, font: reg, color: C.text });
+        y -= 14;
+      }
+    }
+    y -= 6;
+  }
+
+  // ─── Página 1 ───────────────────────────────────────────────────────────
+  coverPage();
+
+  sectionTitle("Dados Existentes");
+  numbered(1, "Nome do cliente", visita.beneficiarioNomeSnapshot);
+  numbered(2, "CPF", formatCPF(visita.beneficiarioCpfSnapshot));
+  numbered(3, "Endereço", visita.beneficiarioEnderecoSnapshot);
+  numbered(4, "Município", visita.municipio);
+  longField(5, "Finalidade do crédito (itens detalhados da proposta)", visita.finalidadeDetalhada);
+
+  y -= 6;
+  sectionTitle("Dados da Visita");
+  numbered(6, "Data", fmtDate(visita.dataVisita));
+  y -= 4;
+  simNao(7, 'Está aplicando o recurso conforme finalidade da proposta?', visita.aplicandoConforme, visita.aplicandoConformeJustificativa ?? "");
+
+  ensureSpace(30);
+  page.drawText(safe("8 - Até a data da visita assinale quais das finalidades propostas já foram aplicadas:"), {
+    x: M,
+    y,
+    size: 10.5,
+    font: reg,
+    color: C.text,
+  });
+  y -= 18;
+
+  const cols = 3;
+  const colWidth = (width - 2 * M) / cols;
+  const rowsPerCol = Math.ceil(visita.purposeLabels.length / cols);
+  const gridTop = y;
+  const rowHeight = 15;
+  ensureSpace(rowsPerCol * rowHeight + 10);
+  for (const [i, p] of visita.purposeLabels.entries()) {
+    const col = Math.floor(i / rowsPerCol);
+    const row = i % rowsPerCol;
+    const x = M + col * colWidth;
+    const rowY = gridTop - row * rowHeight;
+    let cx = x;
+    cx = checkbox(cx, p.selected);
+    const label = p.isOutro ? "Outro" : p.label;
+    page.drawText(safe(label), { x: cx, y: rowY, size: 9.5, font: reg, color: C.text, maxWidth: colWidth - (cx - x) - 6 });
+  }
+  y = gridTop - rowsPerCol * rowHeight - 10;
+  if (visita.outroFinalidadeDescricao) {
+    ensureSpace(20);
+    const prefix = "Outro: ";
+    const prefixW = bold.widthOfTextAtSize(prefix, 10);
+    page.drawText(prefix, { x: M, y, size: 10, font: bold, color: C.text });
+    page.drawText(safe(visita.outroFinalidadeDescricao), { x: M + prefixW, y, size: 10, font: reg, color: C.text, maxWidth: width - 2 * M - prefixW });
+    y -= 20;
+  }
+
+  // ─── Página 2 ───────────────────────────────────────────────────────────
+  newPage();
+
+  simNao(9, "Teve algum desafio na aplicação do recurso? Se sim, favor descrever.", visita.teveDesafio);
+  {
+    const lines = wrap(visita.desafioDescricao || "—", reg, 10, width - 2 * M);
+    ensureSpace(14 * lines.length + 6);
+    for (const l of lines) {
+      page.drawText(l, { x: M, y, size: 10, font: reg, color: C.text });
+      y -= 14;
+    }
+    y -= 8;
+  }
+
+  ensureSpace(50);
+  page.drawText(
+    safe("10 - Está recebendo assistência técnica após acessar o crédito? Se sim, informar a periodicidade"),
+    { x: M, y, size: 10.5, font: reg, color: C.text },
+  );
+  y -= 13;
+  page.drawText(safe("(Ex.: semanal, mensal, bimensal, trimestral, semestral...)"), { x: M, y, size: 9, font: italic, color: C.muted });
+  y -= 18;
+  {
+    let x = M;
+    x = checkbox(x, visita.assistenciaTecnica);
+    const periodText = visita.assistenciaTecnica ? `Sim. Periodicidade: ${visita.assistenciaPeriodicidade ?? ""}` : "Sim. Periodicidade: ___________________";
+    page.drawText(safe(periodText), { x, y, size: 10, font: reg, color: C.text });
+    y -= 16;
+    x = M;
+    x = checkbox(x, !visita.assistenciaTecnica);
+    page.drawText("Não", { x, y, size: 10, font: reg, color: C.text });
     y -= 16;
   }
 
-  function field(label: string, value: string, width2 = width - 2 * M) {
-    const lines = wrap(value || "—", reg, 10.5, width2);
-    ensureSpace(14 + lines.length * 13);
-    page.drawText(safe(label.toUpperCase()), { x: M, y, size: 8, font: bold, color: C.muted });
-    y -= 13;
-    for (const l of lines) {
-      page.drawText(l, { x: M, y, size: 10.5, font: reg, color: C.text });
-      y -= 13;
+  longField(11, 'Caso a resposta da questão anterior seja negativa (Não), favor informar o motivo', visita.assistenciaMotivoNegativa ?? (visita.assistenciaTecnica ? "—" : ""));
+
+  numbered(12, "Nome e contato telefônico do técnico que acompanha", visita.tecnicoNomeContato);
+
+  simNao(13, "Já tem ponto de referência da área financiada?", visita.pontoReferencia);
+
+  ensureSpace(24);
+  page.drawText(safe("14 - Registro de fotos da área financiada e da visita:"), { x: M, y, size: 10.5, font: reg, color: C.text });
+  y -= 16;
+
+  if (visita.fotos.length === 0) {
+    page.drawText("Nenhuma foto anexada.", { x: M, y, size: 10, font: italic, color: C.muted });
+    y -= 20;
+  } else {
+    const thumbCols = 3;
+    const gap = 10;
+    const thumbW = (width - 2 * M - gap * (thumbCols - 1)) / thumbCols;
+    const thumbH = thumbW * 0.75;
+    for (let i = 0; i < visita.fotos.length; i += thumbCols) {
+      ensureSpace(thumbH + 10);
+      const rowFotos = visita.fotos.slice(i, i + thumbCols);
+      for (const [idx, foto] of rowFotos.entries()) {
+        const x = M + idx * (thumbW + gap);
+        await drawThumb(pdf, page, foto.fileKey, x, y - thumbH, thumbW, thumbH);
+      }
+      y -= thumbH + 10;
     }
-    y -= 6;
   }
 
-  function twoCols(a: [string, string], b: [string, string]) {
-    const colWidth = (width - 2 * M - 20) / 2;
-    ensureSpace(28);
-    page.drawText(safe(a[0].toUpperCase()), { x: M, y, size: 8, font: bold, color: C.muted });
-    page.drawText(safe(b[0].toUpperCase()), { x: M + colWidth + 20, y, size: 8, font: bold, color: C.muted });
-    y -= 13;
-    page.drawText(safe(a[1] || "—"), { x: M, y, size: 10.5, font: reg, color: C.text });
-    page.drawText(safe(b[1] || "—"), { x: M + colWidth + 20, y, size: 10.5, font: reg, color: C.text });
-    y -= 19;
-  }
-
-  function footer() {
-    page.drawRectangle({ x: 0, y: 0, width, height: 34, color: C.soft });
-    page.drawText(safe(`Documento gerado em ${fmtDateTime(new Date())} pelo sistema Tabôa - Visita Pós-Crédito.`), {
-      x: M,
-      y: 13,
-      size: 7.5,
-      font: reg,
-      color: C.muted,
-    });
-  }
-
-  header("VISITA PÓS-CRÉDITO");
-
-  sectionTitle("Identificação");
-  twoCols(["Beneficiário", visita.beneficiarioNomeSnapshot], ["CPF", formatCPF(visita.beneficiarioCpfSnapshot)]);
-  twoCols(["Município", visita.municipio], ["Data da visita", fmtDate(visita.dataVisita)]);
-  field("Endereço", visita.beneficiarioEnderecoSnapshot);
-  twoCols(["Técnico responsável", visita.tecnico.name], ["Matrícula", visita.tecnico.matricula ?? "—"]);
-
-  sectionTitle("Finalidades do crédito");
-  field("Selecionadas", visita.purposeLabels.length ? visita.purposeLabels.join("; ") : "Nenhuma informada");
-
-  sectionTitle("Acompanhamento pós-crédito");
-  field("7. O crédito foi aplicado conforme o planejado?", RESPOSTA_LABEL[visita.pergunta7Resposta] ?? visita.pergunta7Resposta);
-  if (visita.pergunta7Justificativa) field("Justificativa", visita.pergunta7Justificativa);
-  field("8. O beneficiário recebeu a orientação técnica necessária?", RESPOSTA_LABEL[visita.pergunta8Resposta] ?? visita.pergunta8Resposta);
-  field("9. A atividade gerou emprego/renda adicional?", RESPOSTA_LABEL[visita.pergunta9Resposta] ?? visita.pergunta9Resposta);
-  if (visita.pergunta9QuantidadeEmpregos != null) field("Quantidade de empregos gerados", String(visita.pergunta9QuantidadeEmpregos));
-  if (visita.pergunta9RendaEstimadaCents != null) field("Renda estimada gerada", fmtBRL(visita.pergunta9RendaEstimadaCents));
-  field("10. A atividade financiada está em funcionamento?", RESPOSTA_LABEL[visita.pergunta10Resposta] ?? visita.pergunta10Resposta);
-  if (visita.pergunta10MotivoParalisacao) field("Motivo da paralisação", visita.pergunta10MotivoParalisacao);
-  field("11. Há parcelas do crédito em atraso?", RESPOSTA_LABEL[visita.pergunta11Resposta] ?? visita.pergunta11Resposta);
-  if (visita.pergunta11ParcelasAtrasadas != null) field("Parcelas em atraso", String(visita.pergunta11ParcelasAtrasadas));
-  field("12. O beneficiário enfrentou dificuldades na execução?", RESPOSTA_LABEL[visita.pergunta12Resposta] ?? visita.pergunta12Resposta);
-  if (visita.pergunta12Dificuldades) field("Dificuldades relatadas", visita.pergunta12Dificuldades);
-  field("13. O beneficiário recomendaria o programa a outros?", RESPOSTA_LABEL[visita.pergunta13Resposta] ?? visita.pergunta13Resposta);
-  if (visita.pergunta13Motivo) field("Motivo", visita.pergunta13Motivo);
-
+  ensureSpace(80);
+  page.drawText(safe("15 - Observações:"), { x: M, y, size: 10.5, font: reg, color: C.text });
+  y -= 16;
+  const obsBoxH = 70;
+  ensureSpace(obsBoxH + 10);
+  page.drawRectangle({ x: M, y: y - obsBoxH, width: width - 2 * M, height: obsBoxH, borderColor: C.line, borderWidth: 0.8 });
   if (visita.observacoes) {
-    sectionTitle("Observações do técnico");
-    field("Observações", visita.observacoes);
+    const lines = wrap(visita.observacoes, reg, 9.5, width - 2 * M - 16);
+    let ly = y - 14;
+    for (const l of lines.slice(0, 6)) {
+      page.drawText(l, { x: M + 8, y: ly, size: 9.5, font: reg, color: C.text });
+      ly -= 12;
+    }
   }
+  y -= obsBoxH + 30;
 
-  sectionTitle("Registro fotográfico");
-  field("Fotos anexadas ao registro digital desta visita", `${visita.fotos.length} foto(s) — disponíveis no sistema Tabôa.`);
-
-  // ─── Assinaturas ───
-  ensureSpace(220);
-  sectionTitle("Assinaturas");
+  // ─── Assinaturas ───────────────────────────────────────────────────────
   const tecnicoAssinatura = visita.assinaturas.find((a) => a.tipo === "TECNICO");
   const beneficiarioAssinatura = visita.assinaturas.find((a) => a.tipo === "BENEFICIARIO_DESENHO" || a.tipo === "BENEFICIARIO_DIGITAL");
 
-  const boxW = (width - 2 * M - 20) / 2;
-  const boxH = 150;
-  ensureSpace(boxH + 30);
-  const boxY = y - boxH;
-
-  async function drawSignatureBox(x: number, label: string, sub: string, fileKey: string | undefined) {
-    page.drawRectangle({ x, y: boxY, width: boxW, height: boxH, borderColor: C.line, borderWidth: 1, color: C.white });
-    page.drawText(safe(label.toUpperCase()), { x: x + 10, y: boxY + boxH - 16, size: 8, font: bold, color: C.muted });
-    if (fileKey) {
-      const buf = await readPrivateFileBuffer(fileKey);
-      if (buf) {
-        try {
-          const img = fileKey.endsWith(".png") ? await pdf.embedPng(buf) : await pdf.embedJpg(buf);
-          const maxW = boxW - 20;
-          const maxH = boxH - 46;
-          const scale = Math.min(maxW / img.width, maxH / img.height, 1);
-          const w = img.width * scale;
-          const h = img.height * scale;
-          page.drawImage(img, { x: x + (boxW - w) / 2, y: boxY + 30 + (maxH - h) / 2, width: w, height: h });
-        } catch {
-          page.drawText("(não foi possível carregar a imagem)", { x: x + 10, y: boxY + boxH / 2, size: 8, font: reg, color: C.muted });
-        }
-      }
-    } else {
-      page.drawText("Não enviada", { x: x + 10, y: boxY + boxH / 2, size: 9, font: reg, color: C.muted });
-    }
-    page.drawLine({ start: { x: x + 10, y: boxY + 24 }, end: { x: x + boxW - 10, y: boxY + 24 }, thickness: 0.6, color: C.line });
-    page.drawText(safe(sub), { x: x + 10, y: boxY + 10, size: 8, font: reg, color: C.muted });
-  }
-
-  await drawSignatureBox(M, "Técnico responsável", visita.tecnico.name, tecnicoAssinatura?.fileKey);
-  await drawSignatureBox(M + boxW + 20, "Beneficiário", beneficiarioAssinatura?.testemunhaNome ? `Testemunha: ${beneficiarioAssinatura.testemunhaNome}` : visita.beneficiarioNomeSnapshot, beneficiarioAssinatura?.fileKey);
-  y = boxY - 20;
-
+  ensureSpace(180);
+  await signatureLine(pdf, page, "Assinatura do Técnico", tecnicoAssinatura?.fileKey, width / 2 - 110, y, 220);
+  y -= 90;
+  await signatureLine(pdf, page, "Assinatura do Agricultor", beneficiarioAssinatura?.fileKey, width / 2 - 110, y, 220);
   if (beneficiarioAssinatura?.tipo === "BENEFICIARIO_DIGITAL") {
-    field(
-      "Modo de assinatura do beneficiário",
-      `Impressão digital fotografada, com testemunha ${beneficiarioAssinatura.testemunhaNome ?? "—"}${beneficiarioAssinatura.testemunhaCpf ? ` (CPF ${formatCPF(beneficiarioAssinatura.testemunhaCpf)})` : ""}.`,
+    y -= 30;
+    page.drawText(
+      safe(`Impressão digital fotografada — testemunha: ${beneficiarioAssinatura.testemunhaNome ?? "—"}${beneficiarioAssinatura.testemunhaCpf ? ` (CPF ${formatCPF(beneficiarioAssinatura.testemunhaCpf)})` : ""}`),
+      { x: M, y, size: 8.5, font: italic, color: C.muted },
     );
   }
 
-  ensureSpace(40);
-  field("Situação", visita.status === "FINALIZADA" ? `Finalizada em ${visita.finalizadaEm ? fmtDateTime(visita.finalizadaEm) : "—"} por ${visita.finalizadaPor?.name ?? "—"}` : "Rascunho");
-
-  footer();
+  // Rodapé discreto de rastreabilidade (não faz parte do modelo em papel).
+  const footNote = `${visita.numeroDocumento ?? "RASCUNHO"} · gerado em ${fmtDateTime(new Date())} · sistema Tabôa`;
+  page.drawText(safe(footNote), { x: M, y: 24, size: 7, font: reg, color: C.muted });
 
   return pdf.save();
+}
+
+async function drawThumb(pdf: PDFDocument, page: PDFPage, fileKey: string, x: number, y: number, w: number, h: number) {
+  page.drawRectangle({ x, y, width: w, height: h, borderColor: C.line, borderWidth: 0.6, color: C.white });
+  const buf = await readPrivateFileBuffer(fileKey);
+  if (!buf) return;
+  try {
+    const img = fileKey.endsWith(".png") ? await pdf.embedPng(buf) : await pdf.embedJpg(buf);
+    const scale = Math.min(w / img.width, h / img.height);
+    const iw = img.width * scale;
+    const ih = img.height * scale;
+    page.drawImage(img, { x: x + (w - iw) / 2, y: y + (h - ih) / 2, width: iw, height: ih });
+  } catch {
+    // ignora foto corrompida — mantém a moldura vazia
+  }
+}
+
+async function signatureLine(pdf: PDFDocument, page: PDFPage, label: string, fileKey: string | undefined, x: number, yTop: number, w: number) {
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  if (fileKey) {
+    const buf = await readPrivateFileBuffer(fileKey);
+    if (buf) {
+      try {
+        const img = fileKey.endsWith(".png") ? await pdf.embedPng(buf) : await pdf.embedJpg(buf);
+        const maxH = 50;
+        const scale = Math.min(w / img.width, maxH / img.height, 1);
+        const iw = img.width * scale;
+        const ih = img.height * scale;
+        page.drawImage(img, { x: x + (w - iw) / 2, y: yTop - ih, width: iw, height: ih });
+      } catch {
+        /* segue sem a imagem */
+      }
+    }
+  }
+  page.drawLine({ start: { x, y: yTop - 55 }, end: { x: x + w, y: yTop - 55 }, thickness: 0.8, color: C.box });
+  const labelW = font.widthOfTextAtSize(label, 9.5);
+  page.drawText(label, { x: x + (w - labelW) / 2, y: yTop - 68, size: 9.5, font, color: C.text });
 }

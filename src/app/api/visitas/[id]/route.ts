@@ -41,9 +41,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!parsed.success) return NextResponse.json({ error: "Dados inválidos.", issues: parsed.error.issues }, { status: 422 });
   const data = parsed.data;
 
-  const purposes = await db.purpose.findMany({ where: { id: { in: data.purposeIds }, ativo: true, empresaId: visita.empresaId }, select: { id: true } });
+  const purposes = await db.purpose.findMany({ where: { id: { in: data.purposeIds }, ativo: true, empresaId: visita.empresaId }, select: { id: true, isOutro: true } });
   if (purposes.length !== data.purposeIds.length) {
     return NextResponse.json({ error: "Uma ou mais finalidades selecionadas não existem mais." }, { status: 422 });
+  }
+  if (purposes.some((p) => p.isOutro) && !data.outroFinalidadeDescricao) {
+    return NextResponse.json({ error: "Descreva a finalidade em 'Outro'.", issues: [{ path: ["outroFinalidadeDescricao"], message: "Descreva a finalidade em 'Outro'." }] }, { status: 422 });
   }
 
   const updated = await db.$transaction(async (tx) => {
@@ -61,20 +64,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         municipio: data.municipio,
         dataVisita: new Date(`${data.dataVisita}T12:00:00-03:00`),
         purposes: { create: data.purposeIds.map((purposeId) => ({ purposeId })) },
-        pergunta7Resposta: data.pergunta7Resposta,
-        pergunta7Justificativa: data.pergunta7Justificativa,
-        pergunta8Resposta: data.pergunta8Resposta,
-        pergunta9Resposta: data.pergunta9Resposta,
-        pergunta9QuantidadeEmpregos: data.pergunta9QuantidadeEmpregos,
-        pergunta9RendaEstimadaCents: data.pergunta9RendaEstimadaCents,
-        pergunta10Resposta: data.pergunta10Resposta,
-        pergunta10MotivoParalisacao: data.pergunta10MotivoParalisacao,
-        pergunta11Resposta: data.pergunta11Resposta,
-        pergunta11ParcelasAtrasadas: data.pergunta11ParcelasAtrasadas,
-        pergunta12Resposta: data.pergunta12Resposta,
-        pergunta12Dificuldades: data.pergunta12Dificuldades,
-        pergunta13Resposta: data.pergunta13Resposta,
-        pergunta13Motivo: data.pergunta13Motivo,
+        finalidadeDetalhada: data.finalidadeDetalhada,
+        aplicandoConforme: data.aplicandoConforme,
+        aplicandoConformeJustificativa: data.aplicandoConformeJustificativa,
+        outroFinalidadeDescricao: data.outroFinalidadeDescricao,
+        teveDesafio: data.teveDesafio,
+        desafioDescricao: data.desafioDescricao,
+        assistenciaTecnica: data.assistenciaTecnica,
+        assistenciaPeriodicidade: data.assistenciaPeriodicidade,
+        assistenciaMotivoNegativa: data.assistenciaMotivoNegativa,
+        tecnicoNomeContato: data.tecnicoNomeContato,
+        pontoReferencia: data.pontoReferencia,
         observacoes: data.observacoes,
       },
       include: VISITA_INCLUDE,
