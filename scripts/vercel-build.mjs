@@ -30,4 +30,5 @@ function run(cmd) {
 
 run("prisma generate");
 run("prisma migrate deploy");
+run("tsx prisma/seed.ts"); // idempotente (upsert) — seguro rodar em todo deploy
 run("next build");
