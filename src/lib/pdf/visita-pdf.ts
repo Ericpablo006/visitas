@@ -158,9 +158,9 @@ export async function renderVisitaPdf(visita: VisitaPdfInput): Promise<Uint8Arra
     y -= 6;
   }
 
-  function checkbox(x: number, checked: boolean): number {
+  function checkbox(x: number, rowY: number, checked: boolean): number {
     const s = checked ? "(X)" : "( )";
-    page.drawText(s, { x, y, size: 10, font: reg, color: C.text });
+    page.drawText(s, { x, y: rowY, size: 10, font: reg, color: C.text });
     return x + reg.widthOfTextAtSize(s, 10) + 4;
   }
 
@@ -169,10 +169,10 @@ export async function renderVisitaPdf(visita: VisitaPdfInput): Promise<Uint8Arra
     page.drawText(safe(`${n} - ${label}`), { x: M, y, size: 10.5, font: reg, color: C.text });
     y -= 16;
     let x = M;
-    x = checkbox(x, sim);
+    x = checkbox(x, y, sim);
     page.drawText("Sim", { x, y, size: 10, font: reg, color: C.text });
     x += reg.widthOfTextAtSize("Sim", 10) + 24;
-    x = checkbox(x, !sim);
+    x = checkbox(x, y, !sim);
     page.drawText("Não", { x, y, size: 10, font: reg, color: C.text });
     y -= 16;
     if (justificarSeNao !== undefined) {
@@ -229,7 +229,7 @@ export async function renderVisitaPdf(visita: VisitaPdfInput): Promise<Uint8Arra
     const x = M + col * colWidth;
     const rowY = gridTop - row * rowHeight;
     let cx = x;
-    cx = checkbox(cx, p.selected);
+    cx = checkbox(cx, rowY, p.selected);
     const label = p.isOutro ? "Outro" : p.label;
     page.drawText(safe(label), { x: cx, y: rowY, size: 9.5, font: reg, color: C.text, maxWidth: colWidth - (cx - x) - 6 });
   }
@@ -267,12 +267,12 @@ export async function renderVisitaPdf(visita: VisitaPdfInput): Promise<Uint8Arra
   y -= 18;
   {
     let x = M;
-    x = checkbox(x, visita.assistenciaTecnica);
+    x = checkbox(x, y, visita.assistenciaTecnica);
     const periodText = visita.assistenciaTecnica ? `Sim. Periodicidade: ${visita.assistenciaPeriodicidade ?? ""}` : "Sim. Periodicidade: ___________________";
     page.drawText(safe(periodText), { x, y, size: 10, font: reg, color: C.text });
     y -= 16;
     x = M;
-    x = checkbox(x, !visita.assistenciaTecnica);
+    x = checkbox(x, y, !visita.assistenciaTecnica);
     page.drawText("Não", { x, y, size: 10, font: reg, color: C.text });
     y -= 16;
   }
