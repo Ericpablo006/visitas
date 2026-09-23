@@ -64,7 +64,7 @@ const FINALIDADES: string[] = [
 // que alguém já trocou em "Meu perfil"). Defina SEED_RESET_PASSWORDS=true temporariamente
 // (variável de ambiente) só quando precisar forçar a senha destes dois usuários de volta
 // para ADMIN_PASSWORD/TECNICO_PASSWORD — remova a variável depois de rodar.
-const resetPasswords = process.env.SEED_RESET_PASSWORDS === "true";
+const resetPasswords = process.env.SEED_RESET_PASSWORDS?.trim() === "true";
 
 async function main() {
   const adminName = process.env.ADMIN_NAME || "Administrador Tabôa";
