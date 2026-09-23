@@ -19,7 +19,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       assinaturas: true,
     },
   });
-  if (!visita) return NextResponse.json({ error: "Visita não encontrada." }, { status: 404 });
+  if (!visita || visita.empresaId !== user.empresaId) return NextResponse.json({ error: "Visita não encontrada." }, { status: 404 });
   const isStaff = user.role === "ADMIN" || user.role === "COORDENADOR";
   if (!isStaff && visita.tecnicoId !== user.id) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
 

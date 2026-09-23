@@ -5,9 +5,10 @@ import { requireApiUser } from "@/lib/auth/mobile";
 export async function GET(req: Request) {
   const user = await requireApiUser(req);
   if (!user) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  if (!user.empresaId) return NextResponse.json({ purposes: [] });
 
   const purposes = await db.purpose.findMany({
-    where: { ativo: true },
+    where: { ativo: true, empresaId: user.empresaId },
     orderBy: { sortOrder: "asc" },
     select: { id: true, label: true, sortOrder: true, updatedAt: true },
   });

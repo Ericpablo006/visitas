@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 export default async function PainelPage() {
   const user = await requireUser();
   const isStaff = user.role === "ADMIN" || user.role === "COORDENADOR";
-  const where = isStaff ? {} : { tecnicoId: user.id };
+  const where = { empresaId: user.empresaId!, tecnicoId: isStaff ? undefined : user.id };
 
   const [rascunhos, finalizadas, recentes] = await Promise.all([
     db.visita.count({ where: { ...where, status: "RASCUNHO" } }),

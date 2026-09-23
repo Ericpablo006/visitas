@@ -30,6 +30,7 @@ export async function createTecnicoAction(_prev: ActionState, fd: FormData): Pro
     const user = await db.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
+          empresaId: admin.empresaId,
           name: parsed.data.name,
           email: parsed.data.email,
           matricula: parsed.data.matricula || null,
@@ -61,6 +62,9 @@ export async function toggleTecnicoActiveAction(fd: FormData): Promise<void> {
 
   if (parsed.data.userId === admin.id && !active) return;
 
+  const target = await db.user.findUnique({ where: { id: parsed.data.userId }, select: { empresaId: true } });
+  if (!target || target.empresaId !== admin.empresaId) return;
+
   const user = await db.$transaction(async (tx) => {
     const updated = await tx.user.update({
       where: { id: parsed.data.userId },
@@ -82,6 +86,9 @@ export async function resetTecnicoPasswordAction(_prev: ActionState, fd: FormDat
     const admin = await requireAdmin();
     const parsed = parseForm(resetPasswordSchema, fd);
     if (!parsed.success) return parsed.state;
+
+    const target = await db.user.findUnique({ where: { id: parsed.data.userId }, select: { empresaId: true } });
+    if (!target || target.empresaId !== admin.empresaId) return fail("Usuário não encontrado.");
 
     const user = await db.$transaction(async (tx) => {
       const updated = await tx.user.update({

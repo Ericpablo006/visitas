@@ -17,7 +17,15 @@ export async function middleware(req: NextRequest) {
       url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);
     }
-    if (pathname.startsWith("/admin") && session.role !== "ADMIN" && session.role !== "COORDENADOR") {
+    // SUPER_ADMIN só cuida do cadastro de empresas — não pertence a nenhuma, então
+    // não pode entrar nas telas por-empresa (painel, visitas, técnicos, finalidades, auditoria).
+    if (session.role === "SUPER_ADMIN" && pathname !== "/admin/empresas" && !pathname.startsWith("/admin/empresas/")) {
+      return NextResponse.redirect(new URL("/admin/empresas", req.url));
+    }
+    if (pathname.startsWith("/admin/empresas") && session.role !== "SUPER_ADMIN") {
+      return NextResponse.redirect(new URL("/painel", req.url));
+    }
+    if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/empresas") && session.role !== "ADMIN" && session.role !== "COORDENADOR") {
       return NextResponse.redirect(new URL("/painel", req.url));
     }
   }

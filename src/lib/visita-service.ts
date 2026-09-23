@@ -16,26 +16,28 @@ export type RequestMeta = { ip?: string; userAgent?: string };
  */
 export async function createVisitaIdempotent(
   tecnicoId: string,
+  empresaId: string,
   data: VisitaInput,
   meta: RequestMeta = {},
 ): Promise<{ visita: VisitaWithRelations; created: boolean } | { conflict: true }> {
   const existing = await db.visita.findUnique({ where: { clientLocalId: data.clientLocalId }, include: VISITA_INCLUDE });
   if (existing) {
-    if (existing.tecnicoId !== tecnicoId) return { conflict: true };
+    if (existing.tecnicoId !== tecnicoId || existing.empresaId !== empresaId) return { conflict: true };
     return { visita: existing, created: false };
   }
 
   try {
     const created = await db.$transaction(async (tx) => {
       const beneficiario = await tx.beneficiario.upsert({
-        where: { cpf: data.beneficiarioCpf },
+        where: { empresaId_cpf: { empresaId, cpf: data.beneficiarioCpf } },
         update: { nome: data.beneficiarioNome, endereco: data.beneficiarioEndereco, municipio: data.municipio },
-        create: { cpf: data.beneficiarioCpf, nome: data.beneficiarioNome, endereco: data.beneficiarioEndereco, municipio: data.municipio },
+        create: { empresaId, cpf: data.beneficiarioCpf, nome: data.beneficiarioNome, endereco: data.beneficiarioEndereco, municipio: data.municipio },
       });
 
       const visita = await tx.visita.create({
         data: {
           clientLocalId: data.clientLocalId,
+          empresaId,
           tecnicoId,
           beneficiarioId: beneficiario.id,
           beneficiarioNomeSnapshot: data.beneficiarioNome,
@@ -93,9 +95,9 @@ export async function finalizeVisitaIdempotent(visitaId: string, userId: string,
 
     const ano = current.dataVisita.getFullYear();
     const seq = await tx.documentSequence.upsert({
-      where: { ano },
+      where: { empresaId_ano: { empresaId: current.empresaId, ano } },
       update: { ultimo: { increment: 1 } },
-      create: { ano, ultimo: 1 },
+      create: { empresaId: current.empresaId, ano, ultimo: 1 },
     });
 
     const result = await tx.visita.update({

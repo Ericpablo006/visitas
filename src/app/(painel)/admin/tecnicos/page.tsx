@@ -6,8 +6,8 @@ import { NovoTecnicoForm } from "./NovoTecnicoForm";
 const ROLE_LABEL: Record<string, string> = { TECNICO: "Técnico", COORDENADOR: "Coordenador", ADMIN: "Administrador" };
 
 export default async function TecnicosPage() {
-  await requireAdmin();
-  const usuarios = await db.user.findMany({ orderBy: { name: "asc" } });
+  const admin = await requireAdmin();
+  const usuarios = await db.user.findMany({ where: { empresaId: admin.empresaId }, orderBy: { name: "asc" } });
 
   return (
     <div className="space-y-6">

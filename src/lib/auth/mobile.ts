@@ -161,7 +161,7 @@ export async function requireApiUser(req: Request): Promise<SessionUser | null> 
     if (!payload) return null;
     const user = await db.user.findUnique({ where: { id: payload.sub } });
     if (!user || !user.active || user.tokenVersion !== payload.tv) return null;
-    return { id: user.id, name: user.name, email: user.email, role: user.role };
+    return { id: user.id, name: user.name, email: user.email, role: user.role, empresaId: user.empresaId };
   }
 
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
@@ -169,7 +169,7 @@ export async function requireApiUser(req: Request): Promise<SessionUser | null> 
   if (!payload) return null;
   const user = await db.user.findUnique({ where: { id: payload.sub } });
   if (!user || !user.active || user.tokenVersion !== payload.tv) return null;
-  return { id: user.id, name: user.name, email: user.email, role: user.role };
+  return { id: user.id, name: user.name, email: user.email, role: user.role, empresaId: user.empresaId };
 }
 
 export async function getRequestDeviceId(): Promise<string | null> {

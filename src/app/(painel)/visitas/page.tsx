@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 export default async function VisitasPage() {
   const user = await requireUser();
   const isStaff = user.role === "ADMIN" || user.role === "COORDENADOR";
-  const where = isStaff ? {} : { tecnicoId: user.id };
+  const where = { empresaId: user.empresaId!, tecnicoId: isStaff ? undefined : user.id };
 
   const visitas = await db.visita.findMany({
     where,

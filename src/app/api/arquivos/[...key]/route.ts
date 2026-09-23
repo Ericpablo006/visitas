@@ -17,10 +17,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ key: str
   if (prefix !== "visitas" || !visitaId) return NextResponse.json({ error: "Arquivo não encontrado." }, { status: 404 });
 
   const isStaff = user.role === "ADMIN" || user.role === "COORDENADOR";
-  if (!isStaff) {
-    const visita = await db.visita.findUnique({ where: { id: visitaId }, select: { tecnicoId: true } });
-    if (!visita || visita.tecnicoId !== user.id) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
-  }
+  const visita = await db.visita.findUnique({ where: { id: visitaId }, select: { tecnicoId: true, empresaId: true } });
+  if (!visita || visita.empresaId !== user.empresaId) return NextResponse.json({ error: "Arquivo não encontrado." }, { status: 404 });
+  if (!isStaff && visita.tecnicoId !== user.id) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
 
   const file = await openPrivateFile(key);
   if (!file) return NextResponse.json({ error: "Arquivo não encontrado." }, { status: 404 });

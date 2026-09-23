@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { createVisitaIdempotent, finalizeVisitaIdempotent } from "@/lib/visita-service";
 import type { VisitaInput } from "@/lib/schemas/visita";
 
+let empresaId: string;
 let tecnicoId: string;
 let purposeId: string;
 const ano = new Date().getFullYear();
@@ -39,15 +40,17 @@ const CPFS_VALIDOS = ["52998224725", "11144477735", "93541134780", "71428793860"
 
 async function novaVisitaRascunho(indice: string) {
   const cpf = CPFS_VALIDOS[Number(indice) % CPFS_VALIDOS.length] ?? CPFS_VALIDOS[0]!;
-  const result = await createVisitaIdempotent(tecnicoId, baseInput(cpf));
+  const result = await createVisitaIdempotent(tecnicoId, empresaId, baseInput(cpf));
   if ("conflict" in result) throw new Error("conflito inesperado");
   return result.visita;
 }
 
 beforeAll(async () => {
   const suffix = randomUUID().slice(0, 8);
-  const tecnico = await db.user.create({ data: { name: "Técnico Sequência", email: `seq-${suffix}@teste.local`, passwordHash: "x", role: "TECNICO" } });
-  const purpose = await db.purpose.create({ data: { label: `Finalidade sequência ${suffix}` } });
+  const empresa = await db.empresa.create({ data: { nome: `Empresa Sequência ${suffix}` } });
+  const tecnico = await db.user.create({ data: { empresaId: empresa.id, name: "Técnico Sequência", email: `seq-${suffix}@teste.local`, passwordHash: "x", role: "TECNICO" } });
+  const purpose = await db.purpose.create({ data: { empresaId: empresa.id, label: `Finalidade sequência ${suffix}` } });
+  empresaId = empresa.id;
   tecnicoId = tecnico.id;
   purposeId = purpose.id;
 });
@@ -56,6 +59,9 @@ afterAll(async () => {
   await db.visita.deleteMany({ where: { tecnicoId } });
   await db.purpose.delete({ where: { id: purposeId } }).catch(() => {});
   await db.user.delete({ where: { id: tecnicoId } }).catch(() => {});
+  await db.beneficiario.deleteMany({ where: { empresaId } });
+  await db.documentSequence.deleteMany({ where: { empresaId } });
+  await db.empresa.delete({ where: { id: empresaId } }).catch(() => {});
   await db.$disconnect();
 });
 

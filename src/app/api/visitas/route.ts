@@ -10,6 +10,7 @@ import { createVisitaIdempotent } from "@/lib/visita-service";
 export async function POST(req: Request) {
   const user = await requireApiUser(req);
   if (!user) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  if (!user.empresaId) return NextResponse.json({ error: "Esta conta não pertence a uma empresa." }, { status: 403 });
 
   const limited = await limitByIp("criar-visita", 60, 60);
   if (limited) return NextResponse.json({ error: limited }, { status: 429 });
@@ -23,13 +24,13 @@ export async function POST(req: Request) {
   }
   const data = parsed.data;
 
-  const purposes = await db.purpose.findMany({ where: { id: { in: data.purposeIds }, ativo: true }, select: { id: true } });
+  const purposes = await db.purpose.findMany({ where: { id: { in: data.purposeIds }, ativo: true, empresaId: user.empresaId }, select: { id: true } });
   if (purposes.length !== data.purposeIds.length) {
     return NextResponse.json({ error: "Uma ou mais finalidades selecionadas não existem mais." }, { status: 422 });
   }
 
   const meta = await requestMeta();
-  const result = await createVisitaIdempotent(user.id, data, meta);
+  const result = await createVisitaIdempotent(user.id, user.empresaId, data, meta);
   if ("conflict" in result) {
     return NextResponse.json({ error: "Esta visita pertence a outro técnico." }, { status: 409 });
   }
@@ -40,6 +41,7 @@ export async function POST(req: Request) {
 export async function GET(req: Request) {
   const user = await requireApiUser(req);
   if (!user) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  if (!user.empresaId) return NextResponse.json({ visitas: [] });
 
   const url = new URL(req.url);
   const status = url.searchParams.get("status");
@@ -47,6 +49,7 @@ export async function GET(req: Request) {
 
   const visitas = await db.visita.findMany({
     where: {
+      empresaId: user.empresaId,
       tecnicoId: isStaff ? undefined : user.id,
       status: status === "RASCUNHO" || status === "FINALIZADA" ? status : undefined,
     },

@@ -45,7 +45,7 @@ export async function loginAction(_prev: ActionState, fd: FormData): Promise<Act
       await writeAudit(tx, { actorId: user.id, acao: "LOGIN", entidade: "User", entidadeId: user.id, ip: meta.ip, userAgent: meta.userAgent });
     });
 
-    redirect(safeNext(next));
+    redirect(safeNext(next, user.role === "SUPER_ADMIN" ? "/admin/empresas" : "/painel"));
   });
 }
 

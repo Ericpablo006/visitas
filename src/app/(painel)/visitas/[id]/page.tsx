@@ -20,7 +20,7 @@ export default async function VisitaDetalhePage({ params }: { params: Promise<{ 
       assinaturas: true,
     },
   });
-  if (!visita || (!isStaff && visita.tecnicoId !== user.id)) notFound();
+  if (!visita || visita.empresaId !== user.empresaId || (!isStaff && visita.tecnicoId !== user.id)) notFound();
 
   const tecnicoAssinatura = visita.assinaturas.find((a) => a.tipo === "TECNICO");
   const beneficiarioAssinatura = visita.assinaturas.find((a) => a.tipo !== "TECNICO");

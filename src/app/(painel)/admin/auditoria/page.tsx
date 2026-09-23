@@ -5,8 +5,13 @@ const fmtDateTime = (d: Date) =>
   new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(d);
 
 export default async function AuditoriaPage() {
-  await requireCoordenadorOuAdmin();
-  const logs = await db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 300, include: { actor: { select: { name: true, email: true } } } });
+  const admin = await requireCoordenadorOuAdmin();
+  const logs = await db.auditLog.findMany({
+    where: { actor: { is: { empresaId: admin.empresaId } } },
+    orderBy: { createdAt: "desc" },
+    take: 300,
+    include: { actor: { select: { name: true, email: true } } },
+  });
 
   return (
     <div className="space-y-6">

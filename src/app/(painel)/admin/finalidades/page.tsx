@@ -4,8 +4,8 @@ import { toggleFinalidadeAction } from "@/actions/finalidades";
 import { NovaFinalidadeForm } from "./NovaFinalidadeForm";
 
 export default async function FinalidadesPage() {
-  await requireCoordenadorOuAdmin();
-  const finalidades = await db.purpose.findMany({ orderBy: { sortOrder: "asc" } });
+  const admin = await requireCoordenadorOuAdmin();
+  const finalidades = await db.purpose.findMany({ where: { empresaId: admin.empresaId! }, orderBy: { sortOrder: "asc" } });
 
   return (
     <div className="space-y-6">

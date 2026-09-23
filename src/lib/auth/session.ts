@@ -10,6 +10,8 @@ export type SessionUser = {
   name: string;
   email: string;
   role: Role;
+  /** Nulo somente para SUPER_ADMIN (não pertence a nenhuma empresa). */
+  empresaId: string | null;
 };
 
 export async function createSession(user: { id: string; role: Role; tokenVersion: number }) {
@@ -38,10 +40,10 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   if (!payload) return null;
   const user = await db.user.findUnique({
     where: { id: payload.sub },
-    select: { id: true, name: true, email: true, role: true, active: true, tokenVersion: true },
+    select: { id: true, name: true, email: true, role: true, active: true, tokenVersion: true, empresaId: true },
   });
   if (!user || !user.active || user.tokenVersion !== payload.tv) return null;
-  return { id: user.id, name: user.name, email: user.email, role: user.role };
+  return { id: user.id, name: user.name, email: user.email, role: user.role, empresaId: user.empresaId };
 });
 
 export async function requireUser(next?: string): Promise<SessionUser> {
@@ -59,6 +61,13 @@ export async function requireAdmin(): Promise<SessionUser> {
 export async function requireCoordenadorOuAdmin(): Promise<SessionUser> {
   const user = await getCurrentUser();
   if (!user || (user.role !== "COORDENADOR" && user.role !== "ADMIN")) redirect("/painel");
+  return user;
+}
+
+/** SUPER_ADMIN gerencia o cadastro de empresas — não pertence a nenhuma. */
+export async function requireSuperAdmin(): Promise<SessionUser> {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "SUPER_ADMIN") redirect("/entrar");
   return user;
 }
 

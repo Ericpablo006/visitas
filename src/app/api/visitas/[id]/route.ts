@@ -5,9 +5,10 @@ import { visitaSchema } from "@/lib/schemas/visita";
 import { writeAudit, requestMeta } from "@/lib/audit";
 import { serializeVisita, VISITA_INCLUDE } from "@/lib/visita-response";
 
-async function loadAuthorized(id: string, userId: string, isStaff: boolean) {
+async function loadAuthorized(id: string, userId: string, empresaId: string | null, isStaff: boolean) {
   const visita = await db.visita.findUnique({ where: { id }, include: VISITA_INCLUDE });
-  if (!visita) return { error: NextResponse.json({ error: "Visita não encontrada." }, { status: 404 }) } as const;
+  // 404 (não 403) quando a empresa não bate — não revela nem a existência da visita de outra empresa.
+  if (!visita || visita.empresaId !== empresaId) return { error: NextResponse.json({ error: "Visita não encontrada." }, { status: 404 }) } as const;
   if (!isStaff && visita.tecnicoId !== userId) {
     return { error: NextResponse.json({ error: "Sem permissão para acessar esta visita." }, { status: 403 }) } as const;
   }
@@ -19,7 +20,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!user) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   const { id } = await params;
   const isStaff = user.role === "ADMIN" || user.role === "COORDENADOR";
-  const { visita, error } = await loadAuthorized(id, user.id, isStaff);
+  const { visita, error } = await loadAuthorized(id, user.id, user.empresaId, isStaff);
   if (error) return error;
   return NextResponse.json({ visita: serializeVisita(visita) });
 }
@@ -28,7 +29,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const user = await requireApiUser(req);
   if (!user) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   const { id } = await params;
-  const { visita, error } = await loadAuthorized(id, user.id, user.role === "ADMIN" || user.role === "COORDENADOR");
+  const { visita, error } = await loadAuthorized(id, user.id, user.empresaId, user.role === "ADMIN" || user.role === "COORDENADOR");
   if (error) return error;
   if (visita.status === "FINALIZADA") {
     return NextResponse.json({ error: "Visita já finalizada não pode mais ser editada." }, { status: 409 });
@@ -40,7 +41,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!parsed.success) return NextResponse.json({ error: "Dados inválidos.", issues: parsed.error.issues }, { status: 422 });
   const data = parsed.data;
 
-  const purposes = await db.purpose.findMany({ where: { id: { in: data.purposeIds }, ativo: true }, select: { id: true } });
+  const purposes = await db.purpose.findMany({ where: { id: { in: data.purposeIds }, ativo: true, empresaId: visita.empresaId }, select: { id: true } });
   if (purposes.length !== data.purposeIds.length) {
     return NextResponse.json({ error: "Uma ou mais finalidades selecionadas não existem mais." }, { status: 422 });
   }

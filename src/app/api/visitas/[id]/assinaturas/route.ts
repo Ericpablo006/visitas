@@ -12,7 +12,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
 
   const visita = await db.visita.findUnique({ where: { id } });
-  if (!visita) return NextResponse.json({ error: "Visita não encontrada." }, { status: 404 });
+  if (!visita || visita.empresaId !== user.empresaId) return NextResponse.json({ error: "Visita não encontrada." }, { status: 404 });
   if (visita.tecnicoId !== user.id && user.role === "TECNICO") {
     return NextResponse.json({ error: "Sem permissão para editar esta visita." }, { status: 403 });
   }

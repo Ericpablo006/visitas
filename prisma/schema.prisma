@@ -24,6 +24,7 @@ datasource db {
 // ─── Enums ───────────────────────────────────────────────────────────────
 
 enum Role {
+  SUPER_ADMIN
   TECNICO
   COORDENADOR
   ADMIN
@@ -63,10 +64,36 @@ enum AuditAction {
   DESATIVACAO
 }
 
+// ─── Empresas (multi-tenant) ─────────────────────────────────────────────
+
+/// Cada organização-cliente do sistema. Um SUPER_ADMIN (empresaId nulo) cadastra
+/// empresas por aqui; todo o resto (usuários, visitas, finalidades, beneficiários)
+/// pertence a exatamente uma empresa e nunca vaza para outra.
+model Empresa {
+  id          String   @id @default(cuid())
+  nome        String
+  cnpj        String?  @unique
+  endereco    String?
+  telefone    String?
+  logoFileKey String?
+  ativa       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  usuarios      User[]
+  visitas       Visita[]
+  purposes      Purpose[]
+  beneficiarios Beneficiario[]
+  sequences     DocumentSequence[]
+}
+
 // ─── Usuários e autenticação ────────────────────────────────────────────
 
 model User {
   id           String   @id @default(cuid())
+  /// Nulo somente para SUPER_ADMIN (gerencia empresas, não pertence a uma).
+  empresaId    String?
+  empresa      Empresa? @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   name         String
   email        String   @unique
   matricula    String?
@@ -85,6 +112,7 @@ model User {
   auditLogs         AuditLog[]
 
   @@index([role])
+  @@index([empresaId])
 }
 
 model MobileRefreshToken {
@@ -104,7 +132,9 @@ model MobileRefreshToken {
 
 model Beneficiario {
   id        String   @id @default(cuid())
-  cpf       String   @unique
+  empresaId String
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  cpf       String
   nome      String
   endereco  String
   municipio String
@@ -113,12 +143,17 @@ model Beneficiario {
   updatedAt DateTime @updatedAt
 
   visitas Visita[]
+
+  @@unique([empresaId, cpf])
 }
 
 /// Lista de finalidades do crédito, editável pelo painel (não é um enum
-/// fixo) para que a equipe possa ajustar sem precisar de novo deploy.
+/// fixo) para que a equipe possa ajustar sem precisar de novo deploy. Cada
+/// empresa mantém sua própria lista.
 model Purpose {
   id        String   @id @default(cuid())
+  empresaId String
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   label     String
   ativo     Boolean  @default(true)
   sortOrder Int      @default(0)
@@ -127,7 +162,7 @@ model Purpose {
 
   visitas VisitaPurpose[]
 
-  @@index([ativo, sortOrder])
+  @@index([empresaId, ativo, sortOrder])
 }
 
 model VisitaPurpose {
@@ -140,16 +175,22 @@ model VisitaPurpose {
   @@unique([visitaId, purposeId])
 }
 
-/// Contador por ano para gerar o número oficial do documento (VP-2026-000123).
+/// Contador por (empresa, ano) para gerar o número oficial do documento (VP-2026-000123).
 model DocumentSequence {
-  ano    Int @id
-  ultimo Int @default(0)
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  ano       Int
+  ultimo    Int     @default(0)
+
+  @@id([empresaId, ano])
 }
 
 // ─── Visita ───────────────────────────────────────────────────────────────
 
 model Visita {
   id              String       @id @default(cuid())
+  empresaId       String
+  empresa         Empresa      @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   /// UUID gerado no app Android (Room) — chave de idempotência para reenvio.
   clientLocalId   String       @unique
   /// Ex.: "VP-2026-000123" — atribuído apenas na finalização.
@@ -212,6 +253,7 @@ model Visita {
   fotos       VisitaFoto[]
   assinaturas VisitaAssinatura[]
 
+  @@index([empresaId, dataVisita])
   @@index([tecnicoId, dataVisita])
   @@index([municipio])
   @@index([status])

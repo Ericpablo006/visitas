@@ -72,6 +72,24 @@ const resetPasswords = process.env.SEED_RESET_PASSWORDS?.trim() === "true";
 const env = (key: string, fallback: string) => (process.env[key]?.trim() || fallback);
 
 async function main() {
+  // SUPER_ADMIN não pertence a empresa nenhuma — é quem cadastra as empresas em Admin → Empresas.
+  const superAdminEmail = env("SUPER_ADMIN_EMAIL", "super@localhost.dev").toLowerCase();
+  const superAdminPassword = env("SUPER_ADMIN_PASSWORD", "TrocarSenha!123");
+  await db.user.upsert({
+    where: { email: superAdminEmail },
+    update: resetPasswords ? { passwordHash: await hashPassword(superAdminPassword) } : {},
+    create: { name: "Super Admin", email: superAdminEmail, passwordHash: await hashPassword(superAdminPassword), role: "SUPER_ADMIN" },
+  });
+  console.log(`✔ Super admin: ${superAdminEmail}${resetPasswords ? " (senha redefinida)" : ""}`);
+
+  // Empresa padrão (a própria Tabôa) — os dados já existentes no banco antes do multi-empresa
+  // foram migrados para cá. `update: {}` preserva nome/logo se alguém já ajustou pelo painel.
+  const empresaTaboa = await db.empresa.upsert({
+    where: { id: "empresa-taboa" },
+    update: {},
+    create: { id: "empresa-taboa", nome: "Tabôa – Fortalecimento Comunitário" },
+  });
+
   const adminName = env("ADMIN_NAME", "Administrador Tabôa");
   const adminEmail = env("ADMIN_EMAIL", "admin@localhost.dev").toLowerCase();
   const adminPassword = env("ADMIN_PASSWORD", "TrocarSenha!123");
@@ -83,14 +101,14 @@ async function main() {
   await db.user.upsert({
     where: { email: adminEmail },
     update: resetPasswords ? { passwordHash: await hashPassword(adminPassword) } : {},
-    create: { name: adminName, email: adminEmail, passwordHash: await hashPassword(adminPassword), role: "ADMIN" },
+    create: { empresaId: empresaTaboa.id, name: adminName, email: adminEmail, passwordHash: await hashPassword(adminPassword), role: "ADMIN" },
   });
   console.log(`✔ Administrador: ${adminEmail}${resetPasswords ? " (senha redefinida)" : ""}`);
 
   await db.user.upsert({
     where: { email: tecnicoEmail },
     update: resetPasswords ? { passwordHash: await hashPassword(tecnicoPassword) } : {},
-    create: { name: tecnicoName, email: tecnicoEmail, passwordHash: await hashPassword(tecnicoPassword), role: "TECNICO", matricula: "T-0001" },
+    create: { empresaId: empresaTaboa.id, name: tecnicoName, email: tecnicoEmail, passwordHash: await hashPassword(tecnicoPassword), role: "TECNICO", matricula: "T-0001" },
   });
   console.log(`✔ Técnico de exemplo: ${tecnicoEmail}${resetPasswords ? " (senha redefinida)" : ""}`);
 
@@ -98,7 +116,7 @@ async function main() {
     await db.purpose.upsert({
       where: { id: `finalidade-${i + 1}` },
       update: { label, sortOrder: i },
-      create: { id: `finalidade-${i + 1}`, label, sortOrder: i },
+      create: { id: `finalidade-${i + 1}`, empresaId: empresaTaboa.id, label, sortOrder: i },
     });
   }
   console.log(`✔ ${FINALIDADES.length} finalidades de crédito cadastradas.`);

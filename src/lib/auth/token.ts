@@ -4,8 +4,8 @@ import { SignJWT, jwtVerify } from "jose";
 export const SESSION_COOKIE = "taboa_session";
 export const SESSION_MAX_AGE = 60 * 60 * 8; // 8 horas — painel administrativo, sessão mais curta que um e-commerce
 
-export type Role = "TECNICO" | "COORDENADOR" | "ADMIN";
-export const ROLES: readonly Role[] = ["TECNICO", "COORDENADOR", "ADMIN"];
+export type Role = "SUPER_ADMIN" | "TECNICO" | "COORDENADOR" | "ADMIN";
+export const ROLES: readonly Role[] = ["SUPER_ADMIN", "TECNICO", "COORDENADOR", "ADMIN"];
 
 export type SessionPayload = { sub: string; role: Role; tv: number };
 
