@@ -20,12 +20,14 @@ export async function POST(req: Request) {
 
   const parsed = visitaSchema.safeParse(json);
   if (!parsed.success) {
+    console.error("[POST /api/visitas] validação falhou", JSON.stringify({ issues: parsed.error.issues }));
     return NextResponse.json({ error: "Dados inválidos.", issues: parsed.error.issues }, { status: 422 });
   }
   const data = parsed.data;
 
   const purposes = await db.purpose.findMany({ where: { id: { in: data.purposeIds }, ativo: true, empresaId: user.empresaId }, select: { id: true } });
   if (purposes.length !== data.purposeIds.length) {
+    console.error("[POST /api/visitas] finalidades ausentes", JSON.stringify({ enviados: data.purposeIds, encontrados: purposes.map((p) => p.id), empresaId: user.empresaId }));
     return NextResponse.json({ error: "Uma ou mais finalidades selecionadas não existem mais." }, { status: 422 });
   }
 
