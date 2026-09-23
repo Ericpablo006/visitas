@@ -26,7 +26,8 @@ export default async function VisitaDetalhePage({ params }: { params: Promise<{ 
 
   const tecnicoAssinatura = visita.assinaturas.find((a) => a.tipo === "TECNICO");
   const beneficiarioAssinatura = visita.assinaturas.find((a) => a.tipo !== "TECNICO");
-  const podeEditar = visita.status === "RASCUNHO" && (isStaff || visita.tecnicoId === user.id);
+  const podeEditar =
+    (visita.status === "RASCUNHO" && (isStaff || visita.tecnicoId === user.id)) || (visita.status === "FINALIZADA" && user.role === "ADMIN");
 
   return (
     <div className="space-y-6">
@@ -48,7 +49,7 @@ export default async function VisitaDetalhePage({ params }: { params: Promise<{ 
           )}
           {podeEditar && (
             <Link href={`/visitas/${visita.id}/editar`} className="btn-secondary">
-              Editar
+              {visita.status === "FINALIZADA" ? "Corrigir" : "Editar"}
             </Link>
           )}
           {user.role === "ADMIN" && <DeleteVisitaButton visitaId={visita.id} />}

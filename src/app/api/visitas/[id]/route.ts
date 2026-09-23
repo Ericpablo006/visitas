@@ -4,6 +4,7 @@ import { requireApiUser } from "@/lib/auth/mobile";
 import { visitaSchema } from "@/lib/schemas/visita";
 import { writeAudit, requestMeta } from "@/lib/audit";
 import { serializeVisita, VISITA_INCLUDE } from "@/lib/visita-response";
+import { deleteStoredFile } from "@/lib/storage";
 
 async function loadAuthorized(id: string, userId: string, empresaId: string | null, isStaff: boolean) {
   const visita = await db.visita.findUnique({ where: { id }, include: VISITA_INCLUDE });
@@ -31,7 +32,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const { visita, error } = await loadAuthorized(id, user.id, user.empresaId, user.role === "ADMIN" || user.role === "COORDENADOR");
   if (error) return error;
-  if (visita.status === "FINALIZADA") {
+  // Visita finalizada só pode ser corrigida por ADMIN (documento oficial já emitido — COORDENADOR
+  // e o próprio técnico continuam travados, como antes; só a exceção do ADMIN é nova).
+  if (visita.status === "FINALIZADA" && user.role !== "ADMIN") {
     return NextResponse.json({ error: "Visita já finalizada não pode mais ser editada." }, { status: 409 });
   }
 
@@ -49,6 +52,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: "Descreva a finalidade em 'Outro'.", issues: [{ path: ["outroFinalidadeDescricao"], message: "Descreva a finalidade em 'Outro'." }] }, { status: 422 });
   }
 
+  const oldPdfFileKey = visita.pdfFileKey;
   const updated = await db.$transaction(async (tx) => {
     await tx.beneficiario.update({
       where: { id: visita.beneficiarioId },
@@ -76,13 +80,26 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         tecnicoNomeContato: data.tecnicoNomeContato,
         pontoReferencia: data.pontoReferencia,
         observacoes: data.observacoes,
+        // Se já existia um PDF gerado (visita finalizada sendo corrigida), descarta — o próximo
+        // "Baixar PDF" gera um novo, já com os dados corrigidos.
+        pdfFileKey: oldPdfFileKey ? null : undefined,
       },
       include: VISITA_INCLUDE,
     });
     const meta = await requestMeta();
-    await writeAudit(tx, { actorId: user.id, acao: "EDICAO", entidade: "Visita", entidadeId: visita.id, ip: meta.ip, userAgent: meta.userAgent });
+    await writeAudit(tx, {
+      actorId: user.id,
+      acao: "EDICAO",
+      entidade: "Visita",
+      entidadeId: visita.id,
+      detalhes: visita.status === "FINALIZADA" ? { correcaoPosFinalizacao: true } : undefined,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+    });
     return result;
   });
+
+  if (oldPdfFileKey) await deleteStoredFile(oldPdfFileKey);
 
   return NextResponse.json({ visita: serializeVisita(updated) });
 }

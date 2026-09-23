@@ -13,11 +13,13 @@ export default async function EditarVisitaPage({ params }: { params: Promise<{ i
     include: { purposes: { select: { purposeId: true } }, fotos: { orderBy: { ordem: "asc" } } },
   });
   if (!visita || visita.empresaId !== user.empresaId || (!isStaff && visita.tecnicoId !== user.id)) notFound();
-  if (visita.status === "FINALIZADA") notFound(); // finalizada não pode mais ser editada
+  // Rascunho: dono ou staff da empresa pode editar. Finalizada: só ADMIN (correção pós-emissão).
+  if (visita.status === "FINALIZADA" && user.role !== "ADMIN") notFound();
 
   const initial: VisitaWizardInitialData = {
     id: visita.id,
     clientLocalId: visita.clientLocalId,
+    status: visita.status,
     beneficiario: { nome: visita.beneficiarioNomeSnapshot, cpf: visita.beneficiarioCpfSnapshot, endereco: visita.beneficiarioEnderecoSnapshot },
     municipio: visita.municipio,
     dataVisita: visita.dataVisita.toISOString(),

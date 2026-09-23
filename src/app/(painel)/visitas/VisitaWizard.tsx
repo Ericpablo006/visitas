@@ -27,6 +27,7 @@ function dataUrlToBlob(dataUrl: string): Blob {
 export type VisitaWizardInitialData = {
   id: string;
   clientLocalId: string;
+  status: "RASCUNHO" | "FINALIZADA";
   beneficiario: { nome: string; cpf: string; endereco: string };
   municipio: string;
   dataVisita: string;
@@ -49,6 +50,9 @@ export type VisitaWizardInitialData = {
 export function VisitaWizard({ initial, tecnicoNomeSugerido }: { initial?: VisitaWizardInitialData; tecnicoNomeSugerido?: string }) {
   const router = useRouter();
   const isEdit = Boolean(initial);
+  /** Corrigindo uma visita que JÁ foi finalizada (só ADMIN chega aqui) — não faz sentido pedir
+   * assinaturas de novo nem "finalizar" de novo, é só salvar a correção. */
+  const corrigindoFinalizada = initial?.status === "FINALIZADA";
   const [clientLocalId] = useState(() => initial?.clientLocalId ?? uuid());
   const [step, setStep] = useState(0);
   const [purposes, setPurposes] = useState<Purpose[]>([]);
@@ -166,7 +170,18 @@ export function VisitaWizard({ initial, tecnicoNomeSugerido }: { initial?: Visit
       const okSaved = await createOrUpdateVisita();
       if (!okSaved) return;
     }
-    setStep((s) => Math.min(s + 1, STEP_LABELS.length - 1));
+    setStep((s) => {
+      // Corrigindo visita já finalizada: assinaturas já existem, pula direto pra revisão.
+      const next = corrigindoFinalizada && s === 4 ? 6 : s + 1;
+      return Math.min(next, STEP_LABELS.length - 1);
+    });
+  }
+
+  function goBack() {
+    setStep((s) => {
+      const prev = corrigindoFinalizada && s === 6 ? 4 : s - 1;
+      return Math.max(prev, 0);
+    });
   }
 
   function addFotos(files: FileList | null) {
@@ -202,6 +217,12 @@ export function VisitaWizard({ initial, tecnicoNomeSugerido }: { initial?: Visit
     return false;
   }
 
+  /** Corrigindo uma visita já finalizada: só regrava os dados (PATCH) — sem assinaturas novas, sem re-finalizar. */
+  async function salvarCorrecao() {
+    const ok = await createOrUpdateVisita();
+    if (ok && visitaId) router.push(`/visitas/${visitaId}`);
+  }
+
   async function finalizar() {
     if (!visitaId) return;
     setBusy(true);
@@ -230,7 +251,7 @@ export function VisitaWizard({ initial, tecnicoNomeSugerido }: { initial?: Visit
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-ink">{isEdit ? "Editar visita" : "Nova visita"}</h1>
+        <h1 className="text-2xl font-bold text-ink">{corrigindoFinalizada ? "Corrigir visita" : isEdit ? "Editar visita" : "Nova visita"}</h1>
         <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
           {STEP_LABELS.map((label, i) => (
             <span key={label} className={i === step ? "chip-green" : i < step ? "chip-gray bg-brand-100 text-brand-700" : "chip-gray"}>
@@ -414,7 +435,11 @@ export function VisitaWizard({ initial, tecnicoNomeSugerido }: { initial?: Visit
 
         {step === 6 && (
           <div className="space-y-4 text-sm">
-            <p className="text-muted">Confira os dados antes de finalizar. Depois de finalizada, a visita não pode mais ser editada.</p>
+            <p className="text-muted">
+              {corrigindoFinalizada
+                ? "Confira os dados corrigidos. As assinaturas e o número do documento não mudam — só o conteúdo."
+                : "Confira os dados antes de finalizar. Depois de finalizada, a visita não pode mais ser editada."}
+            </p>
             <ul className="space-y-1">
               <li>
                 <span className="text-muted">Cliente:</span> {form.beneficiarioNome}
@@ -428,19 +453,23 @@ export function VisitaWizard({ initial, tecnicoNomeSugerido }: { initial?: Visit
               <li>
                 <span className="text-muted">Fotos:</span> {fotos.length}
               </li>
-              <li>
-                <span className="text-muted">Assinatura do técnico:</span> {tecnicoAssinatura ? "Capturada" : "Faltando"}
-              </li>
-              <li>
-                <span className="text-muted">Assinatura do agricultor:</span> {beneficiarioAssinatura ? "Capturada" : "Faltando"}
-              </li>
+              {!corrigindoFinalizada && (
+                <>
+                  <li>
+                    <span className="text-muted">Assinatura do técnico:</span> {tecnicoAssinatura ? "Capturada" : "Faltando"}
+                  </li>
+                  <li>
+                    <span className="text-muted">Assinatura do agricultor:</span> {beneficiarioAssinatura ? "Capturada" : "Faltando"}
+                  </li>
+                </>
+              )}
             </ul>
           </div>
         )}
       </div>
 
       <div className="flex justify-between">
-        <button type="button" className="btn-secondary" disabled={step === 0 || busy} onClick={() => setStep((s) => s - 1)}>
+        <button type="button" className="btn-secondary" disabled={step === 0 || busy} onClick={goBack}>
           Voltar
         </button>
         {step < STEP_LABELS.length - 1 ? (
@@ -451,6 +480,10 @@ export function VisitaWizard({ initial, tecnicoNomeSugerido }: { initial?: Visit
             onClick={goNext}
           >
             {busy ? "Salvando…" : "Avançar"}
+          </button>
+        ) : corrigindoFinalizada ? (
+          <button type="button" className="btn-primary" disabled={busy} onClick={salvarCorrecao}>
+            {busy ? "Salvando…" : "Salvar correção"}
           </button>
         ) : (
           <button type="button" className="btn-primary" disabled={busy || !tecnicoAssinatura || !beneficiarioAssinatura} onClick={finalizar}>
