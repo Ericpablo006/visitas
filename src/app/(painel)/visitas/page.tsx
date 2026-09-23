@@ -34,7 +34,8 @@ export default async function VisitasPage() {
                 <th className="pb-2 pr-4">Município</th>
                 {isStaff && <th className="pb-2 pr-4">Técnico</th>}
                 <th className="pb-2 pr-4">Data</th>
-                <th className="pb-2">Status</th>
+                <th className="pb-2 pr-4">Status</th>
+                <th className="pb-2">PDF</th>
               </tr>
             </thead>
             <tbody>
@@ -48,10 +49,19 @@ export default async function VisitasPage() {
                   <td className="py-3 pr-4 text-muted">{v.municipio}</td>
                   {isStaff && <td className="py-3 pr-4 text-muted">{v.tecnico.name}</td>}
                   <td className="py-3 pr-4 text-muted">{new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" }).format(v.dataVisita)}</td>
-                  <td className="py-3">
+                  <td className="py-3 pr-4">
                     <span className={v.status === "FINALIZADA" ? "chip-green" : "chip-gray"}>
                       {v.status === "FINALIZADA" ? v.numeroDocumento ?? "Finalizada" : "Rascunho"}
                     </span>
+                  </td>
+                  <td className="py-3">
+                    {v.status === "FINALIZADA" ? (
+                      <a href={`/api/visitas/${v.id}/pdf`} target="_blank" rel="noreferrer" className="font-medium text-brand-700 hover:underline">
+                        Baixar
+                      </a>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
                   </td>
                 </tr>
               ))}

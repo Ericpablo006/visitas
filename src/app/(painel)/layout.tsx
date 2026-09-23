@@ -11,8 +11,10 @@ export default async function PainelLayout({ children }: { children: React.React
       <header className="border-b border-black/5 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-6">
-            <Link href="/painel" className="text-lg font-bold text-brand-700">
-              Tabôa
+            <Link href="/painel" className="flex items-center gap-2 text-lg font-bold text-brand-700">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.webp" alt="VisitaTech" className="h-8 w-8 rounded-md object-cover" />
+              VisitaTech
             </Link>
             <nav className="flex items-center gap-4 text-sm font-medium text-muted">
               <Link href="/painel" className="hover:text-brand-700">
