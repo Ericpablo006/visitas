@@ -16,6 +16,7 @@ export function serializeVisita(v: VisitaWithRelations) {
   return {
     id: v.id,
     clientLocalId: v.clientLocalId,
+    agendamentoId: v.agendamentoId,
     numeroDocumento: v.numeroDocumento,
     status: v.status,
     tecnicoId: v.tecnicoId,

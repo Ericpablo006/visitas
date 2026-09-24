@@ -11,6 +11,9 @@ export const visitaSchema = z
   .object({
     clientLocalId: z.string().uuid("Identificador local inválido."),
 
+    // Preenchido quando a visita nasce de um agendamento criado pelo admin.
+    agendamentoId: z.string().cuid().optional(),
+
     // 1-4 — identificação
     beneficiarioNome: zName,
     beneficiarioCpf: zCpf,

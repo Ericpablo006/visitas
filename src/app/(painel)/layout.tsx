@@ -32,6 +32,12 @@ export default async function PainelLayout({ children }: { children: React.React
                   </Link>
                   {isStaff && (
                     <>
+                      <Link href="/admin/clientes" className="hover:text-brand-700">
+                        Clientes
+                      </Link>
+                      <Link href="/admin/agenda" className="hover:text-brand-700">
+                        Agenda
+                      </Link>
                       <Link href="/admin/tecnicos" className="hover:text-brand-700">
                         Técnicos
                       </Link>

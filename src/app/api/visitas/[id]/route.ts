@@ -32,9 +32,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const { visita, error } = await loadAuthorized(id, user.id, user.empresaId, user.role === "ADMIN" || user.role === "COORDENADOR");
   if (error) return error;
-  // Visita finalizada só pode ser corrigida por ADMIN (documento oficial já emitido — COORDENADOR
-  // e o próprio técnico continuam travados, como antes; só a exceção do ADMIN é nova).
-  if (visita.status === "FINALIZADA" && user.role !== "ADMIN") {
+  // Visita finalizada só pode ser corrigida por ADMIN ou pelo próprio técnico que a fez
+  // (documento oficial já emitido — COORDENADOR continua travado).
+  const podeCorrigirFinalizada = user.role === "ADMIN" || (user.role === "TECNICO" && visita.tecnicoId === user.id);
+  if (visita.status === "FINALIZADA" && !podeCorrigirFinalizada) {
     return NextResponse.json({ error: "Visita já finalizada não pode mais ser editada." }, { status: 409 });
   }
 

@@ -28,6 +28,16 @@ export async function createVisitaIdempotent(
 
   try {
     const created = await db.$transaction(async (tx) => {
+      // Visita nascida de um agendamento: confirma que ele pertence a esse técnico/empresa
+      // e ainda não foi atendido antes de vincular (a unique constraint em Visita.agendamentoId
+      // também protege contra corrida — ver catch do P2002 abaixo).
+      if (data.agendamentoId) {
+        const agendamento = await tx.agendamento.findUnique({ where: { id: data.agendamentoId } });
+        if (!agendamento || agendamento.empresaId !== empresaId || agendamento.tecnicoId !== tecnicoId) {
+          throw new Error("Agendamento inválido.");
+        }
+      }
+
       const beneficiario = await tx.beneficiario.upsert({
         where: { empresaId_cpf: { empresaId, cpf: data.beneficiarioCpf } },
         update: { nome: data.beneficiarioNome, endereco: data.beneficiarioEndereco, municipio: data.municipio },
@@ -37,6 +47,7 @@ export async function createVisitaIdempotent(
       const visita = await tx.visita.create({
         data: {
           clientLocalId: data.clientLocalId,
+          agendamentoId: data.agendamentoId ?? undefined,
           empresaId,
           tecnicoId,
           beneficiarioId: beneficiario.id,

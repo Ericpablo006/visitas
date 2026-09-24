@@ -79,6 +79,7 @@ model Empresa {
   purposes      Purpose[]
   beneficiarios Beneficiario[]
   sequences     DocumentSequence[]
+  agendamentos  Agendamento[]
 }
 
 // ─── Usuários e autenticação ────────────────────────────────────────────
@@ -104,6 +105,8 @@ model User {
   assinaturasCriadas VisitaAssinatura[]  @relation("AssinaturaCriadaPor")
   refreshTokens     MobileRefreshToken[]
   auditLogs         AuditLog[]
+  agendamentosAtribuidos Agendamento[]   @relation("AgendamentoTecnico")
+  agendamentosCriados    Agendamento[]   @relation("AgendamentoCriadoPor")
 
   @@index([role])
   @@index([empresaId])
@@ -136,9 +139,41 @@ model Beneficiario {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  visitas Visita[]
+  visitas      Visita[]
+  agendamentos Agendamento[]
 
   @@unique([empresaId, cpf])
+}
+
+/// Agendamento de visita criado pelo ADMIN/COORDENADOR pra um técnico ir a
+/// campo — separado da Visita em si (que só existe quando o técnico
+/// efetivamente registra a visita, offline-first, pelo app). O status
+/// "pendente"/"atendido" é derivado de `visita != null`, não é um campo à parte.
+model Agendamento {
+  id        String  @id @default(cuid())
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+
+  beneficiarioId  String
+  beneficiario    Beneficiario @relation(fields: [beneficiarioId], references: [id], onDelete: Restrict)
+  nomePropriedade String
+  latitude        Float?
+  longitude       Float?
+  dataAgendada    DateTime?
+  observacoes     String?
+
+  tecnicoId String
+  tecnico   User   @relation("AgendamentoTecnico", fields: [tecnicoId], references: [id], onDelete: Restrict)
+
+  criadoPorId String
+  criadoPor   User   @relation("AgendamentoCriadoPor", fields: [criadoPorId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  visita Visita?
+
+  @@index([empresaId, tecnicoId])
 }
 
 /// Lista de finalidades do crédito, editável pelo painel (não é um enum
@@ -196,6 +231,12 @@ model Visita {
 
   tecnicoId String
   tecnico   User   @relation("VisitaTecnico", fields: [tecnicoId], references: [id], onDelete: Restrict)
+
+  /// Preenchido quando a visita nasce de um agendamento criado pelo admin
+  /// (o técnico tocou "Iniciar visita" na agenda do app). Opcional — visitas
+  /// continuam podendo ser criadas do zero em campo, sem agendamento prévio.
+  agendamentoId String?      @unique
+  agendamento   Agendamento? @relation(fields: [agendamentoId], references: [id], onDelete: SetNull)
 
   beneficiarioId String
   beneficiario   Beneficiario @relation(fields: [beneficiarioId], references: [id], onDelete: Restrict)

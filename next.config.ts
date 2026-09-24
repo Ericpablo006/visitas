@@ -17,7 +17,9 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
             key: "Content-Security-Policy",
-            value: `default-src 'self'; img-src 'self' data: blob:; ${scriptSrc} style-src 'self' 'unsafe-inline'; frame-ancestors 'none';`,
+            // img-src abre pros tiles do OpenStreetMap (mini-mapa de localização da propriedade
+            // em /admin/agenda — ver src/components/PropertyMapPicker.tsx).
+            value: `default-src 'self'; img-src 'self' data: blob: https://*.tile.openstreetmap.org; ${scriptSrc} style-src 'self' 'unsafe-inline'; frame-ancestors 'none';`,
           },
         ],
       },
