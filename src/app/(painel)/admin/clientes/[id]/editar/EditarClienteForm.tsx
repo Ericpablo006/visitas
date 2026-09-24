@@ -1,10 +1,16 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import dynamic from "next/dynamic";
 import { updateClienteAction } from "@/actions/clientes";
 import { formatCPF } from "@/lib/cpf";
+
+const PropertyMapPicker = dynamic(() => import("@/components/PropertyMapPicker").then((m) => m.PropertyMapPicker), {
+  ssr: false,
+  loading: () => <div className="h-72 w-full animate-pulse rounded-lg bg-black/5" />,
+});
 
 type Cliente = {
   id: string;
@@ -13,18 +19,27 @@ type Cliente = {
   endereco: string;
   municipio: string;
   telefone: string | null;
+  finalidadeCreditoId: string | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
-export function EditarClienteForm({ cliente }: { cliente: Cliente }) {
+type Finalidade = { id: string; label: string };
+
+export function EditarClienteForm({ cliente, finalidades }: { cliente: Cliente; finalidades: Finalidade[] }) {
   const [state, formAction, pending] = useActionState(updateClienteAction, null);
   const router = useRouter();
+  const ref = useRef<HTMLFormElement>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
+    cliente.latitude != null && cliente.longitude != null ? { lat: cliente.latitude, lng: cliente.longitude } : null,
+  );
 
   useEffect(() => {
     if (state?.ok) router.push("/admin/clientes");
   }, [state, router]);
 
   return (
-    <form action={formAction} className="space-y-3">
+    <form ref={ref} action={formAction} className="space-y-3">
       <input type="hidden" name="id" value={cliente.id} />
       {state && !state.ok && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{state.message}</p>}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -52,7 +67,32 @@ export function EditarClienteForm({ cliente }: { cliente: Cliente }) {
           <label className="label">Telefone (opcional)</label>
           <input className="input" name="telefone" defaultValue={cliente.telefone ?? ""} />
         </div>
+        <div>
+          <label className="label">Finalidade do crédito (opcional)</label>
+          <select className="input" name="finalidadeCreditoId" defaultValue={cliente.finalidadeCreditoId ?? ""}>
+            <option value="">Não informada</option>
+            {finalidades.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+          {state?.errors?.finalidadeCreditoId && <p className="field-error">{state.errors.finalidadeCreditoId}</p>}
+        </div>
       </div>
+
+      <div>
+        <label className="label">Localização da propriedade (opcional)</label>
+        <PropertyMapPicker latitude={coords?.lat ?? null} longitude={coords?.lng ?? null} onChange={(lat, lng) => setCoords({ lat, lng })} />
+        {coords && (
+          <>
+            <input type="hidden" name="latitude" value={coords.lat} />
+            <input type="hidden" name="longitude" value={coords.lng} />
+          </>
+        )}
+        {state?.errors?.latitude && <p className="field-error">{state.errors.latitude}</p>}
+      </div>
+
       <button className="btn-primary" type="submit" disabled={pending}>
         {pending ? "Salvando…" : "Salvar alterações"}
       </button>

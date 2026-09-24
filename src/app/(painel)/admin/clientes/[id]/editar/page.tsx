@@ -6,7 +6,10 @@ import { EditarClienteForm } from "./EditarClienteForm";
 export default async function EditarClientePage({ params }: { params: Promise<{ id: string }> }) {
   const staff = await requireCoordenadorOuAdmin();
   const { id } = await params;
-  const cliente = await db.beneficiario.findUnique({ where: { id } });
+  const [cliente, finalidades] = await Promise.all([
+    db.beneficiario.findUnique({ where: { id } }),
+    db.purpose.findMany({ where: { empresaId: staff.empresaId!, ativo: true }, orderBy: { sortOrder: "asc" } }),
+  ]);
   if (!cliente || cliente.empresaId !== staff.empresaId) notFound();
 
   return (
@@ -16,7 +19,7 @@ export default async function EditarClientePage({ params }: { params: Promise<{ 
         <p className="text-sm text-muted">Corrigir dados do produtor {cliente.nome}. Visitas já registradas mantêm o snapshot dos dados no momento em que foram feitas.</p>
       </div>
       <div className="card">
-        <EditarClienteForm cliente={cliente} />
+        <EditarClienteForm cliente={cliente} finalidades={finalidades} />
       </div>
     </div>
   );

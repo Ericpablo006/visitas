@@ -1,9 +1,10 @@
 import { db } from "@/lib/db";
 import { requireCoordenadorOuAdmin } from "@/lib/auth/session";
-import { toggleFinalidadeAction } from "@/actions/finalidades";
 import { NovaFinalidadeForm } from "./NovaFinalidadeForm";
+import { FinalidadeRow } from "./FinalidadeRow";
 
-export default async function FinalidadesPage() {
+export default async function FinalidadesPage({ searchParams }: { searchParams: Promise<{ erro?: string }> }) {
+  const { erro } = await searchParams;
   const admin = await requireCoordenadorOuAdmin();
   const finalidades = await db.purpose.findMany({ where: { empresaId: admin.empresaId! }, orderBy: { sortOrder: "asc" } });
 
@@ -14,6 +15,8 @@ export default async function FinalidadesPage() {
         <p className="text-sm text-muted">Lista usada na etapa 2 do formulário de visita (site e app). Editável sem precisar de novo deploy.</p>
       </div>
 
+      {erro && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}
+
       <div className="card">
         <NovaFinalidadeForm />
       </div>
@@ -21,16 +24,7 @@ export default async function FinalidadesPage() {
       <div className="card">
         <ul className="divide-y divide-black/5">
           {finalidades.map((f) => (
-            <li key={f.id} className="flex items-center justify-between py-2.5 text-sm">
-              <span className={f.ativo ? "text-ink" : "text-muted line-through"}>{f.label}</span>
-              <form action={toggleFinalidadeAction}>
-                <input type="hidden" name="id" value={f.id} />
-                <input type="hidden" name="ativo" value={(!f.ativo).toString()} />
-                <button type="submit" className={f.ativo ? "chip-green" : "chip-gray"}>
-                  {f.ativo ? "Ativa" : "Inativa"}
-                </button>
-              </form>
-            </li>
+            <FinalidadeRow key={f.id} finalidade={f} />
           ))}
         </ul>
       </div>

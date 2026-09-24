@@ -136,6 +136,14 @@ model Beneficiario {
   endereco  String
   municipio String
   telefone  String?
+  /// Coordenadas da propriedade — mesma ideia do pino de localização do Agendamento,
+  /// mas aqui fica fixado no cadastro do cliente (independe de haver ou não visita agendada).
+  latitude  Float?
+  longitude Float?
+  /// Finalidade do crédito original que motivou o cadastro (reaproveita a mesma lista
+  /// editável usada na etapa 2 do formulário de visita — ver model Purpose).
+  finalidadeCreditoId String?
+  finalidadeCredito   Purpose? @relation(fields: [finalidadeCreditoId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -143,6 +151,7 @@ model Beneficiario {
   agendamentos Agendamento[]
 
   @@unique([empresaId, cpf])
+  @@index([finalidadeCreditoId])
 }
 
 /// Agendamento de visita criado pelo ADMIN/COORDENADOR pra um técnico ir a
@@ -192,7 +201,8 @@ model Purpose {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  visitas VisitaPurpose[]
+  visitas       VisitaPurpose[]
+  beneficiarios Beneficiario[]
 
   @@index([empresaId, ativo, sortOrder])
 }

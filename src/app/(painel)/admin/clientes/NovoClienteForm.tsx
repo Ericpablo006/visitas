@@ -1,14 +1,26 @@
 "use client";
 
-import { useActionState, useRef, useEffect } from "react";
+import { useActionState, useRef, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { createClienteAction } from "@/actions/clientes";
 
-export function NovoClienteForm() {
+const PropertyMapPicker = dynamic(() => import("@/components/PropertyMapPicker").then((m) => m.PropertyMapPicker), {
+  ssr: false,
+  loading: () => <div className="h-72 w-full animate-pulse rounded-lg bg-black/5" />,
+});
+
+type Finalidade = { id: string; label: string };
+
+export function NovoClienteForm({ finalidades }: { finalidades: Finalidade[] }) {
   const [state, formAction, pending] = useActionState(createClienteAction, null);
   const ref = useRef<HTMLFormElement>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
-    if (state?.ok) ref.current?.reset();
+    if (state?.ok) {
+      ref.current?.reset();
+      setCoords(null);
+    }
   }, [state]);
 
   return (
@@ -41,7 +53,32 @@ export function NovoClienteForm() {
           <label className="label">Telefone (opcional)</label>
           <input className="input" name="telefone" />
         </div>
+        <div>
+          <label className="label">Finalidade do crédito (opcional)</label>
+          <select className="input" name="finalidadeCreditoId" defaultValue="">
+            <option value="">Não informada</option>
+            {finalidades.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+          {state?.errors?.finalidadeCreditoId && <p className="field-error">{state.errors.finalidadeCreditoId}</p>}
+        </div>
       </div>
+
+      <div>
+        <label className="label">Localização da propriedade (opcional)</label>
+        <PropertyMapPicker latitude={coords?.lat ?? null} longitude={coords?.lng ?? null} onChange={(lat, lng) => setCoords({ lat, lng })} />
+        {coords && (
+          <>
+            <input type="hidden" name="latitude" value={coords.lat} />
+            <input type="hidden" name="longitude" value={coords.lng} />
+          </>
+        )}
+        {state?.errors?.latitude && <p className="field-error">{state.errors.latitude}</p>}
+      </div>
+
       <button className="btn-primary" type="submit" disabled={pending}>
         {pending ? "Cadastrando…" : "Cadastrar cliente"}
       </button>
