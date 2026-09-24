@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SignaturePad } from "./nova/SignaturePad";
+import { formatCPF } from "@/lib/cpf";
 
 type Purpose = { id: string; label: string; isOutro?: boolean };
 type FotoLocal = { clientLocalId: string; file?: File; previewUrl: string; jaEnviada?: boolean };
+export type ClienteCadastrado = { id: string; nome: string; cpf: string; endereco: string; municipio: string };
 
 const STEP_LABELS = ["Identificação", "Finalidades", "Perguntas", "Observações", "Fotos", "Assinaturas", "Revisão"];
 
@@ -47,7 +49,15 @@ export type VisitaWizardInitialData = {
   fotos: { id: string; clientLocalId: string; url: string }[];
 };
 
-export function VisitaWizard({ initial, tecnicoNomeSugerido }: { initial?: VisitaWizardInitialData; tecnicoNomeSugerido?: string }) {
+export function VisitaWizard({
+  initial,
+  tecnicoNomeSugerido,
+  clientes = [],
+}: {
+  initial?: VisitaWizardInitialData;
+  tecnicoNomeSugerido?: string;
+  clientes?: ClienteCadastrado[];
+}) {
   const router = useRouter();
   const isEdit = Boolean(initial);
   /** Corrigindo uma visita que JÁ foi finalizada (só ADMIN chega aqui) — não faz sentido pedir
@@ -100,7 +110,22 @@ export function VisitaWizard({ initial, tecnicoNomeSugerido }: { initial?: Visit
       .catch(() => setError("Não foi possível carregar as finalidades. Verifique a conexão."));
   }, []);
 
+  const [clienteSelecionadoId, setClienteSelecionadoId] = useState("");
+
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
+
+  function selecionarCliente(id: string) {
+    setClienteSelecionadoId(id);
+    const cliente = clientes.find((c) => c.id === id);
+    if (!cliente) return;
+    setForm((f) => ({
+      ...f,
+      beneficiarioNome: cliente.nome,
+      beneficiarioCpf: formatCPF(cliente.cpf),
+      beneficiarioEndereco: cliente.endereco,
+      municipio: cliente.municipio,
+    }));
+  }
 
   function togglePurpose(id: string) {
     set("purposeIds", form.purposeIds.includes(id) ? form.purposeIds.filter((p) => p !== id) : [...form.purposeIds, id]);
@@ -266,6 +291,18 @@ export function VisitaWizard({ initial, tecnicoNomeSugerido }: { initial?: Visit
       <div className="card">
         {step === 0 && (
           <div className="space-y-4">
+            {clientes.length > 0 && (
+              <Field label="Cliente cadastrado (opcional — preenche os campos abaixo)">
+                <select className="input" value={clienteSelecionadoId} onChange={(e) => selecionarCliente(e.target.value)}>
+                  <option value="">Digitar manualmente…</option>
+                  {clientes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nome} — {formatCPF(c.cpf)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
             <Field label="Nome do cliente">
               <input className="input" value={form.beneficiarioNome} onChange={(e) => set("beneficiarioNome", e.target.value)} />
             </Field>

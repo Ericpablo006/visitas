@@ -20,11 +20,12 @@ type Cliente = {
   municipio: string;
   telefone: string | null;
   finalidadeCreditoId: string | null;
+  finalidadeCreditoOutro: string | null;
   latitude: number | null;
   longitude: number | null;
 };
 
-type Finalidade = { id: string; label: string };
+type Finalidade = { id: string; label: string; isOutro: boolean };
 
 export function EditarClienteForm({ cliente, finalidades }: { cliente: Cliente; finalidades: Finalidade[] }) {
   const [state, formAction, pending] = useActionState(updateClienteAction, null);
@@ -33,6 +34,8 @@ export function EditarClienteForm({ cliente, finalidades }: { cliente: Cliente; 
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
     cliente.latitude != null && cliente.longitude != null ? { lat: cliente.latitude, lng: cliente.longitude } : null,
   );
+  const [finalidadeId, setFinalidadeId] = useState(cliente.finalidadeCreditoId ?? "");
+  const outroSelecionado = finalidades.some((f) => f.id === finalidadeId && f.isOutro);
 
   useEffect(() => {
     if (state?.ok) router.push("/admin/clientes");
@@ -69,7 +72,7 @@ export function EditarClienteForm({ cliente, finalidades }: { cliente: Cliente; 
         </div>
         <div>
           <label className="label">Finalidade do crédito (opcional)</label>
-          <select className="input" name="finalidadeCreditoId" defaultValue={cliente.finalidadeCreditoId ?? ""}>
+          <select className="input" name="finalidadeCreditoId" value={finalidadeId} onChange={(e) => setFinalidadeId(e.target.value)}>
             <option value="">Não informada</option>
             {finalidades.map((f) => (
               <option key={f.id} value={f.id}>
@@ -79,6 +82,13 @@ export function EditarClienteForm({ cliente, finalidades }: { cliente: Cliente; 
           </select>
           {state?.errors?.finalidadeCreditoId && <p className="field-error">{state.errors.finalidadeCreditoId}</p>}
         </div>
+        {outroSelecionado && (
+          <div className="sm:col-span-2">
+            <label className="label">Descreva a finalidade</label>
+            <input className="input" name="finalidadeCreditoOutro" defaultValue={cliente.finalidadeCreditoOutro ?? ""} placeholder="Escreva a finalidade do crédito" required />
+            {state?.errors?.finalidadeCreditoOutro && <p className="field-error">{state.errors.finalidadeCreditoOutro}</p>}
+          </div>
+        )}
       </div>
 
       <div>

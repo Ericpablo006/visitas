@@ -23,6 +23,12 @@ const clienteSchema = z
       .trim()
       .optional()
       .transform((v) => (v ? v : null)),
+    finalidadeCreditoOutro: z
+      .string()
+      .trim()
+      .max(200)
+      .optional()
+      .transform((v) => (v ? v : null)),
     latitude: z.coerce.number().min(-90).max(90).optional(),
     longitude: z.coerce.number().min(-180).max(180).optional(),
   })
@@ -30,6 +36,23 @@ const clienteSchema = z
     message: "Marque a localização no mapa.",
     path: ["latitude"],
   });
+
+/** Confere que a finalidade existe/pertence à empresa e, se for "Outro", que veio com o texto livre. */
+async function validarFinalidade(
+  empresaId: string,
+  finalidadeCreditoId: string | null,
+  finalidadeCreditoOutro: string | null,
+): Promise<{ ok: true } | { ok: false; message: string; errors?: Record<string, string> }> {
+  if (!finalidadeCreditoId) return { ok: true };
+  const finalidade = await db.purpose.findUnique({ where: { id: finalidadeCreditoId } });
+  if (!finalidade || finalidade.empresaId !== empresaId) {
+    return { ok: false, message: "Finalidade inválida.", errors: { finalidadeCreditoId: "Selecione uma finalidade válida." } };
+  }
+  if (finalidade.isOutro && !finalidadeCreditoOutro) {
+    return { ok: false, message: "Descreva a finalidade em 'Outro'.", errors: { finalidadeCreditoOutro: "Descreva a finalidade." } };
+  }
+  return { ok: true };
+}
 
 export async function createClienteAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   return safely(async () => {
@@ -42,10 +65,8 @@ export async function createClienteAction(_prev: ActionState, fd: FormData): Pro
     });
     if (existing) return fail("Já existe um cliente com este CPF.", { cpf: "CPF já cadastrado." });
 
-    if (parsed.data.finalidadeCreditoId) {
-      const finalidade = await db.purpose.findUnique({ where: { id: parsed.data.finalidadeCreditoId } });
-      if (!finalidade || finalidade.empresaId !== staff.empresaId) return fail("Finalidade inválida.", { finalidadeCreditoId: "Selecione uma finalidade válida." });
-    }
+    const validacao = await validarFinalidade(staff.empresaId!, parsed.data.finalidadeCreditoId, parsed.data.finalidadeCreditoOutro);
+    if (!validacao.ok) return fail(validacao.message, validacao.errors);
 
     const cliente = await db.$transaction(async (tx) => {
       const created = await tx.beneficiario.create({
@@ -57,6 +78,7 @@ export async function createClienteAction(_prev: ActionState, fd: FormData): Pro
           municipio: parsed.data.municipio,
           telefone: parsed.data.telefone || null,
           finalidadeCreditoId: parsed.data.finalidadeCreditoId,
+          finalidadeCreditoOutro: parsed.data.finalidadeCreditoId ? parsed.data.finalidadeCreditoOutro : null,
           latitude: parsed.data.latitude ?? null,
           longitude: parsed.data.longitude ?? null,
         },
@@ -89,10 +111,8 @@ export async function updateClienteAction(_prev: ActionState, fd: FormData): Pro
       if (clash) return fail("Já existe um cliente com este CPF.", { cpf: "CPF já cadastrado." });
     }
 
-    if (parsed.data.finalidadeCreditoId) {
-      const finalidade = await db.purpose.findUnique({ where: { id: parsed.data.finalidadeCreditoId } });
-      if (!finalidade || finalidade.empresaId !== staff.empresaId) return fail("Finalidade inválida.", { finalidadeCreditoId: "Selecione uma finalidade válida." });
-    }
+    const validacao = await validarFinalidade(staff.empresaId!, parsed.data.finalidadeCreditoId, parsed.data.finalidadeCreditoOutro);
+    if (!validacao.ok) return fail(validacao.message, validacao.errors);
 
     const cliente = await db.$transaction(async (tx) => {
       const updated = await tx.beneficiario.update({
@@ -104,6 +124,7 @@ export async function updateClienteAction(_prev: ActionState, fd: FormData): Pro
           municipio: parsed.data.municipio,
           telefone: parsed.data.telefone || null,
           finalidadeCreditoId: parsed.data.finalidadeCreditoId,
+          finalidadeCreditoOutro: parsed.data.finalidadeCreditoId ? parsed.data.finalidadeCreditoOutro : null,
           latitude: parsed.data.latitude ?? null,
           longitude: parsed.data.longitude ?? null,
         },

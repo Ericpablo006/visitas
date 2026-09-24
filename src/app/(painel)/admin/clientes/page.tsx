@@ -47,7 +47,7 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
                 <td className="py-2.5 pr-4 text-muted">{formatCPF(c.cpf)}</td>
                 <td className="py-2.5 pr-4 text-muted">{c.municipio}</td>
                 <td className="py-2.5 pr-4 text-muted">{c.telefone || "—"}</td>
-                <td className="py-2.5 pr-4 text-muted">{c.finalidadeCredito?.label || "—"}</td>
+                <td className="py-2.5 pr-4 text-muted">{(c.finalidadeCredito?.isOutro ? c.finalidadeCreditoOutro : c.finalidadeCredito?.label) || "—"}</td>
                 <td className="py-2.5 pr-4 text-muted">
                   {c.latitude != null && c.longitude != null ? (
                     <a

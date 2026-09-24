@@ -9,19 +9,23 @@ const PropertyMapPicker = dynamic(() => import("@/components/PropertyMapPicker")
   loading: () => <div className="h-72 w-full animate-pulse rounded-lg bg-black/5" />,
 });
 
-type Finalidade = { id: string; label: string };
+type Finalidade = { id: string; label: string; isOutro: boolean };
 
 export function NovoClienteForm({ finalidades }: { finalidades: Finalidade[] }) {
   const [state, formAction, pending] = useActionState(createClienteAction, null);
   const ref = useRef<HTMLFormElement>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [finalidadeId, setFinalidadeId] = useState("");
 
   useEffect(() => {
     if (state?.ok) {
       ref.current?.reset();
       setCoords(null);
+      setFinalidadeId("");
     }
   }, [state]);
+
+  const outroSelecionado = finalidades.some((f) => f.id === finalidadeId && f.isOutro);
 
   return (
     <form ref={ref} action={formAction} className="space-y-3">
@@ -55,7 +59,7 @@ export function NovoClienteForm({ finalidades }: { finalidades: Finalidade[] }) 
         </div>
         <div>
           <label className="label">Finalidade do crédito (opcional)</label>
-          <select className="input" name="finalidadeCreditoId" defaultValue="">
+          <select className="input" name="finalidadeCreditoId" value={finalidadeId} onChange={(e) => setFinalidadeId(e.target.value)}>
             <option value="">Não informada</option>
             {finalidades.map((f) => (
               <option key={f.id} value={f.id}>
@@ -65,6 +69,13 @@ export function NovoClienteForm({ finalidades }: { finalidades: Finalidade[] }) 
           </select>
           {state?.errors?.finalidadeCreditoId && <p className="field-error">{state.errors.finalidadeCreditoId}</p>}
         </div>
+        {outroSelecionado && (
+          <div className="sm:col-span-2">
+            <label className="label">Descreva a finalidade</label>
+            <input className="input" name="finalidadeCreditoOutro" placeholder="Escreva a finalidade do crédito" required />
+            {state?.errors?.finalidadeCreditoOutro && <p className="field-error">{state.errors.finalidadeCreditoOutro}</p>}
+          </div>
+        )}
       </div>
 
       <div>

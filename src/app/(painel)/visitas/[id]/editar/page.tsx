@@ -16,6 +16,12 @@ export default async function EditarVisitaPage({ params }: { params: Promise<{ i
   // Rascunho: dono ou staff da empresa pode editar. Finalizada: só ADMIN (correção pós-emissão).
   if (visita.status === "FINALIZADA" && user.role !== "ADMIN") notFound();
 
+  const clientes = await db.beneficiario.findMany({
+    where: { empresaId: user.empresaId! },
+    orderBy: { nome: "asc" },
+    select: { id: true, nome: true, cpf: true, endereco: true, municipio: true },
+  });
+
   const initial: VisitaWizardInitialData = {
     id: visita.id,
     clientLocalId: visita.clientLocalId,
@@ -39,5 +45,5 @@ export default async function EditarVisitaPage({ params }: { params: Promise<{ i
     fotos: visita.fotos.map((f) => ({ id: f.id, clientLocalId: f.clientLocalId, url: `/api/arquivos/${f.fileKey}` })),
   };
 
-  return <VisitaWizard initial={initial} />;
+  return <VisitaWizard initial={initial} clientes={clientes} />;
 }
