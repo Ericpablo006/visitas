@@ -326,16 +326,21 @@ export async function renderVisitaPdf(visita: VisitaPdfInput): Promise<Uint8Arra
   const tecnicoAssinatura = visita.assinaturas.find((a) => a.tipo === "TECNICO");
   const beneficiarioAssinatura = visita.assinaturas.find((a) => a.tipo === "BENEFICIARIO_DESENHO" || a.tipo === "BENEFICIARIO_DIGITAL");
 
-  ensureSpace(180);
+  ensureSpace(220);
   await signatureLine(pdf, page, "Assinatura do Técnico", tecnicoAssinatura?.fileKey, width / 2 - 110, y, 220);
   y -= 90;
   await signatureLine(pdf, page, "Assinatura do Agricultor", beneficiarioAssinatura?.fileKey, width / 2 - 110, y, 220);
+  // O rótulo "Assinatura do Agricultor" (desenhado dentro de signatureLine) fica em y-68;
+  // a legenda da testemunha precisa ficar abaixo dele, nunca sobre a área da foto (y-0 a y-50).
+  y -= 88;
   if (beneficiarioAssinatura?.tipo === "BENEFICIARIO_DIGITAL") {
-    y -= 30;
-    page.drawText(
-      safe(`Impressão digital fotografada — testemunha: ${beneficiarioAssinatura.testemunhaNome ?? "—"}${beneficiarioAssinatura.testemunhaCpf ? ` (CPF ${formatCPF(beneficiarioAssinatura.testemunhaCpf)})` : ""}`),
-      { x: M, y, size: 8.5, font: italic, color: C.muted },
+    const testemunhaLinha = safe(
+      `Impressão digital fotografada — testemunha: ${beneficiarioAssinatura.testemunhaNome ?? "—"}${beneficiarioAssinatura.testemunhaCpf ? ` (CPF ${formatCPF(beneficiarioAssinatura.testemunhaCpf)})` : ""}`,
     );
+    for (const linha of wrap(testemunhaLinha, italic, 8.5, width - 2 * M)) {
+      page.drawText(linha, { x: M, y, size: 8.5, font: italic, color: C.muted });
+      y -= 12;
+    }
   }
 
   // Rodapé discreto de rastreabilidade (não faz parte do modelo em papel).
