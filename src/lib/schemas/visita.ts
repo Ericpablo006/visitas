@@ -18,7 +18,12 @@ export const visitaSchema = z
     beneficiarioNome: zName,
     beneficiarioCpf: zCpf,
     beneficiarioEndereco: z.string().trim().min(3, "Informe o endereço.").max(300),
+    beneficiarioTelefone: zOptText(30),
     municipio: z.string().trim().min(2, "Informe o município.").max(120),
+
+    // Localização da propriedade — capturada pelo GPS em campo, ou herdada do cadastro do cliente.
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
 
     // 5 — finalidade do crédito (itens detalhados da proposta)
     finalidadeDetalhada: z.string().trim().min(3, "Descreva a finalidade do crédito.").max(2000),
@@ -64,6 +69,9 @@ export const visitaSchema = z
     }
     if (!v.assistenciaTecnica && !v.assistenciaMotivoNegativa) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["assistenciaMotivoNegativa"], message: "Informe o motivo." });
+    }
+    if ((v.latitude == null) !== (v.longitude == null)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["latitude"], message: "Marque a localização no mapa." });
     }
   });
 

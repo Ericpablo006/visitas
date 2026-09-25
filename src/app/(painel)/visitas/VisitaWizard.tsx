@@ -2,12 +2,30 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { SignaturePad } from "./nova/SignaturePad";
 import { formatCPF } from "@/lib/cpf";
 
+const PropertyMapPicker = dynamic(() => import("@/components/PropertyMapPicker").then((m) => m.PropertyMapPicker), {
+  ssr: false,
+  loading: () => <div className="h-72 w-full animate-pulse rounded-lg bg-black/5" />,
+});
+
 type Purpose = { id: string; label: string; isOutro?: boolean };
 type FotoLocal = { clientLocalId: string; file?: File; previewUrl: string; jaEnviada?: boolean };
-export type ClienteCadastrado = { id: string; nome: string; cpf: string; endereco: string; municipio: string };
+export type ClienteCadastrado = {
+  id: string;
+  nome: string;
+  cpf: string;
+  endereco: string;
+  municipio: string;
+  telefone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  finalidadeCreditoId: string | null;
+  finalidadeCreditoOutro: string | null;
+  finalidadeCreditoIsOutro: boolean;
+};
 
 const STEP_LABELS = ["Identificação", "Finalidades", "Perguntas", "Observações", "Fotos", "Assinaturas", "Revisão"];
 
@@ -30,8 +48,10 @@ export type VisitaWizardInitialData = {
   id: string;
   clientLocalId: string;
   status: "RASCUNHO" | "FINALIZADA";
-  beneficiario: { nome: string; cpf: string; endereco: string };
+  beneficiario: { nome: string; cpf: string; endereco: string; telefone: string | null };
   municipio: string;
+  latitude: number | null;
+  longitude: number | null;
   dataVisita: string;
   purposeIds: string[];
   finalidadeDetalhada: string;
@@ -74,6 +94,7 @@ export function VisitaWizard({
     beneficiarioNome: initial?.beneficiario.nome ?? "",
     beneficiarioCpf: initial?.beneficiario.cpf ?? "",
     beneficiarioEndereco: initial?.beneficiario.endereco ?? "",
+    beneficiarioTelefone: initial?.beneficiario.telefone ?? "",
     municipio: initial?.municipio ?? "",
     dataVisita: initial?.dataVisita.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
     finalidadeDetalhada: initial?.finalidadeDetalhada ?? "",
@@ -111,6 +132,9 @@ export function VisitaWizard({
   }, []);
 
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState("");
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
+    initial?.latitude != null && initial?.longitude != null ? { lat: initial.latitude, lng: initial.longitude } : null,
+  );
 
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -124,7 +148,11 @@ export function VisitaWizard({
       beneficiarioCpf: formatCPF(cliente.cpf),
       beneficiarioEndereco: cliente.endereco,
       municipio: cliente.municipio,
+      beneficiarioTelefone: cliente.telefone ?? f.beneficiarioTelefone,
+      purposeIds: cliente.finalidadeCreditoId ? Array.from(new Set([...f.purposeIds, cliente.finalidadeCreditoId])) : f.purposeIds,
+      outroFinalidadeDescricao: cliente.finalidadeCreditoIsOutro && cliente.finalidadeCreditoOutro ? cliente.finalidadeCreditoOutro : f.outroFinalidadeDescricao,
     }));
+    if (cliente.latitude != null && cliente.longitude != null) setCoords({ lat: cliente.latitude, lng: cliente.longitude });
   }
 
   function togglePurpose(id: string) {
@@ -156,7 +184,10 @@ export function VisitaWizard({
         beneficiarioNome: form.beneficiarioNome,
         beneficiarioCpf: form.beneficiarioCpf,
         beneficiarioEndereco: form.beneficiarioEndereco,
+        beneficiarioTelefone: form.beneficiarioTelefone || null,
         municipio: form.municipio,
+        latitude: coords?.lat,
+        longitude: coords?.lng,
         dataVisita: form.dataVisita,
         finalidadeDetalhada: form.finalidadeDetalhada,
         purposeIds: form.purposeIds,
@@ -316,12 +347,18 @@ export function VisitaWizard({
               <Field label="Município">
                 <input className="input" value={form.municipio} onChange={(e) => set("municipio", e.target.value)} />
               </Field>
-              <Field label="Data da visita">
-                <input type="date" className="input" value={form.dataVisita} onChange={(e) => set("dataVisita", e.target.value)} />
+              <Field label="Telefone (opcional)">
+                <input className="input" value={form.beneficiarioTelefone} onChange={(e) => set("beneficiarioTelefone", e.target.value)} />
               </Field>
             </div>
+            <Field label="Data da visita">
+              <input type="date" className="input" value={form.dataVisita} onChange={(e) => set("dataVisita", e.target.value)} />
+            </Field>
             <Field label="Finalidade do crédito (itens detalhados da proposta)">
               <textarea className="input" rows={3} value={form.finalidadeDetalhada} onChange={(e) => set("finalidadeDetalhada", e.target.value)} />
+            </Field>
+            <Field label="Localização da propriedade (opcional)">
+              <PropertyMapPicker latitude={coords?.lat ?? null} longitude={coords?.lng ?? null} onChange={(lat, lng) => setCoords({ lat, lng })} />
             </Field>
           </div>
         )}

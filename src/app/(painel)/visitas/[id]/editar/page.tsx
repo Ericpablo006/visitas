@@ -16,18 +16,38 @@ export default async function EditarVisitaPage({ params }: { params: Promise<{ i
   // Rascunho: dono ou staff da empresa pode editar. Finalizada: só ADMIN (correção pós-emissão).
   if (visita.status === "FINALIZADA" && user.role !== "ADMIN") notFound();
 
-  const clientes = await db.beneficiario.findMany({
+  const clientesRaw = await db.beneficiario.findMany({
     where: { empresaId: user.empresaId! },
     orderBy: { nome: "asc" },
-    select: { id: true, nome: true, cpf: true, endereco: true, municipio: true },
+    select: {
+      id: true,
+      nome: true,
+      cpf: true,
+      endereco: true,
+      municipio: true,
+      telefone: true,
+      latitude: true,
+      longitude: true,
+      finalidadeCreditoId: true,
+      finalidadeCreditoOutro: true,
+      finalidadeCredito: { select: { isOutro: true } },
+    },
   });
+  const clientes = clientesRaw.map((c) => ({ ...c, finalidadeCreditoIsOutro: c.finalidadeCredito?.isOutro ?? false }));
 
   const initial: VisitaWizardInitialData = {
     id: visita.id,
     clientLocalId: visita.clientLocalId,
     status: visita.status,
-    beneficiario: { nome: visita.beneficiarioNomeSnapshot, cpf: visita.beneficiarioCpfSnapshot, endereco: visita.beneficiarioEnderecoSnapshot },
+    beneficiario: {
+      nome: visita.beneficiarioNomeSnapshot,
+      cpf: visita.beneficiarioCpfSnapshot,
+      endereco: visita.beneficiarioEnderecoSnapshot,
+      telefone: visita.beneficiarioTelefoneSnapshot,
+    },
     municipio: visita.municipio,
+    latitude: visita.latitude,
+    longitude: visita.longitude,
     dataVisita: visita.dataVisita.toISOString(),
     purposeIds: visita.purposes.map((p) => p.purposeId),
     finalidadeDetalhada: visita.finalidadeDetalhada,

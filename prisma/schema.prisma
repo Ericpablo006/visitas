@@ -258,9 +258,15 @@ model Visita {
   beneficiarioNomeSnapshot     String
   beneficiarioCpfSnapshot      String
   beneficiarioEnderecoSnapshot String
+  beneficiarioTelefoneSnapshot String?
 
   municipio  String
   dataVisita DateTime
+
+  /// Localização da propriedade — capturada pelo GPS do app durante a visita, ou herdada do
+  /// cadastro do cliente ao selecioná-lo no formulário (mesma ideia do Agendamento/Beneficiario).
+  latitude  Float?
+  longitude Float?
 
   /// Pergunta 5 — itens detalhados da proposta original do crédito (texto livre).
   finalidadeDetalhada String

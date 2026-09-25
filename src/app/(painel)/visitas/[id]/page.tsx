@@ -63,12 +63,29 @@ export default async function VisitaDetalhePage({ params }: { params: Promise<{ 
           <p>
             <span className="text-muted">Endereço:</span> {visita.beneficiarioEnderecoSnapshot}
           </p>
+          {visita.beneficiarioTelefoneSnapshot && (
+            <p>
+              <span className="text-muted">Telefone:</span> {visita.beneficiarioTelefoneSnapshot}
+            </p>
+          )}
           <p>
             <span className="text-muted">Técnico:</span> {visita.tecnico.name} {visita.tecnico.matricula ? `(${visita.tecnico.matricula})` : ""}
           </p>
           <p>
             <span className="text-muted">5. Finalidade do crédito:</span> {visita.finalidadeDetalhada}
           </p>
+          {visita.latitude != null && visita.longitude != null && (
+            <p>
+              <a
+                href={`https://www.openstreetmap.org/?mlat=${visita.latitude}&mlon=${visita.longitude}#map=16/${visita.latitude}/${visita.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-brand-700 hover:underline"
+              >
+                Ver localização da propriedade no mapa
+              </a>
+            </p>
+          )}
         </div>
         <div className="card space-y-2 text-sm">
           <h2 className="font-semibold text-ink">8. Finalidades já aplicadas</h2>
