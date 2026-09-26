@@ -13,8 +13,11 @@ export default async function EditarVisitaPage({ params }: { params: Promise<{ i
     include: { purposes: { select: { purposeId: true } }, fotos: { orderBy: { ordem: "asc" } } },
   });
   if (!visita || visita.empresaId !== user.empresaId || (!isStaff && visita.tecnicoId !== user.id)) notFound();
-  // Rascunho: dono ou staff da empresa pode editar. Finalizada: só ADMIN (correção pós-emissão).
-  if (visita.status === "FINALIZADA" && user.role !== "ADMIN") notFound();
+  // Rascunho: dono ou staff da empresa pode editar. Finalizada: ADMIN ou o próprio técnico que
+  // fez a visita (documento oficial já emitido — COORDENADOR continua travado). Mesma regra do
+  // PATCH em api/visitas/[id]/route.ts — precisa ficar em sincronia com aquele guard.
+  const podeCorrigirFinalizada = user.role === "ADMIN" || (user.role === "TECNICO" && visita.tecnicoId === user.id);
+  if (visita.status === "FINALIZADA" && !podeCorrigirFinalizada) notFound();
 
   const clientesRaw = await db.beneficiario.findMany({
     where: { empresaId: user.empresaId! },
